@@ -1,7 +1,6 @@
 extern crate sdl2;
 
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
@@ -27,19 +26,20 @@ pub fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     let palette = build_palette();
 
+    // clear the screen with
     canvas.set_draw_color(palette[VGA_FLOOR_COLOR as usize]);
     canvas.clear();
     canvas.set_draw_color(palette[VGA_CEILING_COLORS[0] as usize]);
     canvas.fill_rect(Rect::new(0, 0, width, height / 2)).unwrap();
     canvas.present();
 
+    // wait for any key to quit the program
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
                 _ => {}
