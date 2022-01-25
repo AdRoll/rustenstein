@@ -4,6 +4,8 @@ use sdl2::event::Event;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
+mod map_data;
+
 const VGA_FLOOR_COLOR: u32 = 0x19;
 const VGA_CEILING_COLORS: [u32; 60] = [
     0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0xbf, 0x4e, 0x4e, 0x4e, 0x1d, 0x8d, 0x4e,
@@ -30,7 +32,9 @@ pub fn main() {
     canvas.set_draw_color(palette[VGA_FLOOR_COLOR as usize]);
     canvas.clear();
     canvas.set_draw_color(palette[VGA_CEILING_COLORS[0] as usize]);
-    canvas.fill_rect(Rect::new(0, 0, width, height / 2)).unwrap();
+    canvas
+        .fill_rect(Rect::new(0, 0, width, height / 2))
+        .unwrap();
     canvas.present();
 
     // wait for any key to quit the program
@@ -38,10 +42,7 @@ pub fn main() {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    ..
-                } => break 'running,
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                 _ => {}
             }
         }
@@ -308,5 +309,11 @@ pub fn build_palette() -> [Color; 256] {
         (38, 0, 34),
     ];
     // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
-    colors.map(|(r, g, b)| Color::RGB((r * 255 / 63) as u8, (g * 255 / 63) as u8, (b * 255 / 63) as u8))
+    colors.map(|(r, g, b)| {
+        Color::RGB(
+            (r * 255 / 63) as u8,
+            (g * 255 / 63) as u8,
+            (b * 255 / 63) as u8,
+        )
+    })
 }
