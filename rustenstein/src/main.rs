@@ -5,6 +5,7 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
 mod map_data;
+mod map_parser;
 
 const VGA_FLOOR_COLOR: u32 = 0x19;
 const VGA_CEILING_COLORS: [u32; 60] = [
