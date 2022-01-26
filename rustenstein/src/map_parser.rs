@@ -20,7 +20,7 @@ fn parse_map_head(path: PathBuf) -> MapHead {
 
     MapHead {
         magic: u16::from_le_bytes(raw_data[0..2].try_into().unwrap()),
-        pointers: raw_data[2..(4 * 100)]
+        pointers: raw_data[2..=(4 * 100)]
             .chunks_exact(4)
             .map(|x| i32::from_le_bytes(x.try_into().unwrap()))
             .filter(|&x| x > 0)
@@ -77,7 +77,8 @@ fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
                     .try_into()
                     .unwrap(),
             ) as usize;
-            output.extend(vec![&compressed_data[(offset + 2)..(offset + 4)]; count].concat());
+            let value = &compressed_data[(offset + 4)..(offset + 6)];
+            output.extend(vec![value; count].concat());
             word_i += 3;
         } else {
             output.extend_from_slice(&compressed_data[offset..(offset + 2)]);
