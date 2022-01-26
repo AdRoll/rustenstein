@@ -6,7 +6,9 @@ use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
+use cache::Picture;
 
+mod cache;
 mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
 
@@ -21,6 +23,7 @@ const VGA_CEILING_COLORS: [usize; 60] = [
 const STATUS_LINES: u32 = 40;
 
 pub fn main() {
+    let pics_cache = init();
     let (width, height) = (640, 400);
     let scale_factor = width / 320;
     let level = 0;
@@ -29,8 +32,8 @@ pub fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let color_map = build_color_map();
-    let titlepic_data = std::fs::read("titlepic.bin").unwrap();
-    let statuspic_data = std::fs::read("statuspic.bin").unwrap();
+    let titlepic = pics_cache.get_pic(cache::TITLEPIC);
+    let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -40,7 +43,7 @@ pub fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
-    let texture = draw_to_texture(&texture_creator, titlepic_data, 320, 200, color_map);
+    let texture = draw_to_texture(&texture_creator, &titlepic, color_map);
 
     canvas.copy(&texture, None, None);
     canvas.present();
@@ -62,9 +65,7 @@ pub fn main() {
 
     let texture = draw_to_texture(
         &texture_creator,
-        statuspic_data,
-        320,
-        STATUS_LINES,
+        &statuspic,
         color_map,
     );
     // I don't know why I had to *5 for the height
@@ -83,23 +84,21 @@ pub fn main() {
     wait_for_key(&mut event_pump);
 }
 
-fn draw_to_texture(
-    texture_creator: &TextureCreator<WindowContext>,
-    data: Vec<u8>,
-    width: u32,
-    height: u32,
+fn draw_to_texture<'a>(
+    texture_creator: &'a TextureCreator<WindowContext>,
+    pic: &'a Picture,
     color_map: ColorMap,
-) -> Texture {
+) -> Texture<'a> {
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
         .unwrap();
 
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
         // different from the window size
-        for y in 0..height {
-            for x in 0..width {
-                let source_index = (y * (width >> 2) + (x >> 2)) + (x & 3) * (width >> 2) * height;
-                let color = data[source_index as usize];
+        for y in 0..pic.height {
+            for x in 0..pic.width {
+                let source_index = (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let color = pic.data[source_index as usize];
                 let (r, g, b) = color_map[color as usize];
                 let offset = y as usize * pitch + x as usize * 3;
                 buffer[offset] = r;
@@ -395,4 +394,8 @@ fn build_color_map() -> ColorMap {
             (b * 255 / 63) as u8,
         )
     })
+}
+
+fn init() -> cache::Cache {
+    cache::startup()
 }
