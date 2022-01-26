@@ -1,10 +1,7 @@
 extern crate sdl2;
 
 use sdl2::event::Event;
-use sdl2::pixels::{Color, Palette, PixelFormatEnum};
-use sdl2::rect::Rect;
-use sdl2::render::Texture;
-use sdl2::surface::Surface;
+use sdl2::pixels::{PixelFormatEnum};
 
 mod map_data;
 
@@ -21,6 +18,7 @@ pub fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
+    let color_map = build_color_map();
     let titlepic_data = std::fs::read("titlepic.bin").unwrap();
 
     let window = video_subsystem
@@ -31,8 +29,6 @@ pub fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
-    // let mut surface = Surface::new(320, 200, PixelFormatEnum::RGB24).unwrap();
-    // surface.set_palette(&build_palette()).unwrap_or_default();
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
         .unwrap();
@@ -45,12 +41,11 @@ pub fn main() {
             for x in 0..width {
                 let source_index = (y * (width >> 2) + (x >> 2)) + (x & 3) * (width >> 2) * height;
                 let color = titlepic_data[source_index as usize];
-                let (r, g, b) = PALETTE[color as usize];
-                // FIXME do we really need to scale or can we leave it to sdl surface?
+                let (r, g, b) = color_map[color as usize];
                 let offset = y * pitch + x * 3;
-                buffer[offset] = (r as u32 * 255 / 63) as u8;
-                buffer[offset + 1] = (g as u32 * 255 / 63) as u8;
-                buffer[offset + 2] = (b as u32 * 255 / 63) as u8;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
             }
         }
     });
@@ -72,7 +67,11 @@ pub fn main() {
     }
 }
 
-const PALETTE: [(u8, u8, u8); 256] = [
+/// Returns an array of colors that maps indexes as used by wolf3d graphics
+/// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.
+pub fn build_color_map() -> [(u8, u8, u8); 256] {
+    // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
+    let palette = [
     (0, 0, 0),
     (0, 0, 42),
     (0, 42, 0),
@@ -329,16 +328,10 @@ const PALETTE: [(u8, u8, u8); 256] = [
     (0, 28, 28),
     (0, 27, 27),
     (38, 0, 34),
-];
-
-pub fn build_palette() -> Palette {
-    // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
-    let colors = PALETTE.map(|(r, g, b)| {
-        Color::RGB(
-            (r * 255 / 63) as u8,
-            (g * 255 / 63) as u8,
-            (b * 255 / 63) as u8,
-        )
-    });
-    Palette::with_colors(&colors).unwrap()
+    ];
+    palette.map(|(r, g, b)| {
+        ((r * 255 / 63) as u8,
+         (g * 255 / 63) as u8,
+         (b * 255 / 63) as u8)
+    })
 }
