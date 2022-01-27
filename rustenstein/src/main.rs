@@ -61,61 +61,46 @@ pub fn main() {
     // TODO reduce duplication
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
         // draw floor and ceiling colors
-        let (fr, fg, fb) = color_map[VGA_FLOOR_COLOR];
-        let (cr, cg, cb) = color_map[VGA_CEILING_COLORS[level]];
+        let floor = color_map[VGA_FLOOR_COLOR];
+        let ceiling = color_map[VGA_CEILING_COLORS[level]];
 
         for x in 0..width {
             for y in 0..view_height / 2 {
-                let offset = y as usize * pitch + x as usize * 3;
-                buffer[offset] = cr;
-                buffer[offset + 1] = cg;
-                buffer[offset + 2] = cb;
+                put_pixel(buffer, pitch, x, y, ceiling);
             }
             for y in view_height / 2..view_height {
-                let offset = y as usize * pitch + x as usize * 3;
-                buffer[offset] = fr;
-                buffer[offset + 1] = fg;
-                buffer[offset + 2] = fb;
+                put_pixel(buffer, pitch, x, y, floor);
             }
         }
 
         let mut current = (view_height / 8) * 3;
         let split = 6;
 
-        let (r, g, b) = color_map[150];
+        let color = color_map[150];
         for x in 0..width / split {
             if x % 4 == 0 {
                 current -= 1
             }
 
             for y in view_center - current..view_center + current {
-                let offset = y as usize * pitch + x as usize * 3;
-                buffer[offset] = r;
-                buffer[offset + 1] = g;
-                buffer[offset + 2] = b;
+                put_pixel(buffer, pitch, x, y, color);
             }
         }
 
-        let (r, g, b) = color_map[155];
+        let color = color_map[155];
         for x in width / split..(width - width / split) {
             for y in view_center - current..view_center + current {
-                let offset = y as usize * pitch + x as usize * 3;
-                buffer[offset] = r;
-                buffer[offset + 1] = g;
-                buffer[offset + 2] = b;
+                put_pixel(buffer, pitch, x, y, color);
             }
         }
 
-        let (r, g, b) = color_map[150];
+        let color = color_map[150];
         for x in width - width / split..width {
             if x % 4 == 0 {
                 current += 1
             }
             for y in view_center - current..view_center + current {
-                let offset = y as usize * pitch + x as usize * 3;
-                buffer[offset] = r;
-                buffer[offset + 1] = g;
-                buffer[offset + 2] = b;
+                put_pixel(buffer, pitch, x, y, color);
             }
         }
     });
@@ -156,26 +141,26 @@ fn draw_to_texture<'a>(
                 let source_index =
                     (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
                 let color = pic.data[source_index as usize];
-                let (r, g, b) = color_map[color as usize];
-                let offset = y as usize * pitch + x as usize * 3;
-                buffer[offset] = r;
-                buffer[offset + 1] = g;
-                buffer[offset + 2] = b;
+                put_pixel(buffer, pitch, x, y, color_map[color as usize]);
             }
         }
     });
     texture
 }
 
+fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8)) {
+    let (r, g, b) = color;
+    let offset = y as usize * pitch + x as usize * 3;
+    buffer[offset] = r;
+    buffer[offset + 1] = g;
+    buffer[offset + 2] = b;
+}
+
 fn wait_for_key(event_pump: &mut sdl2::EventPump) {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Q),
-                    ..
-                } => break 'running,
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                 _ => {}
             }
         }
