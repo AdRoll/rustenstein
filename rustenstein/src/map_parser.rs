@@ -1,5 +1,5 @@
-use std::fs;
 use std::path::PathBuf;
+use std::{fmt, fs};
 
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
 // some map format info: https://moddingwiki.shikadi.net/wiki/GameMaps_Format
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 struct MapHead {
-    magic: u16,
+    magic: u16, // can probably be removed
     pointers: Vec<i32>,
     title: Vec<u8>, // so far empty in map files we've seen, no idea what to do with this for now... could probably be a string
 }
@@ -64,14 +64,15 @@ impl MapLevelHeader {
 
 /// See: https://moddingwiki.shikadi.net/wiki/Id_Software_RLEW_compression
 fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
-    // RLEW signature for our WL1 file is 0xABCD in little-endian
+    // RLEW signature for our WL1 file is 0xABCD in little-endian but 0xFEFE may be used
     let mut output = Vec::new();
     let mut word_i = 0;
     let n_words = compressed_data.len() / 2;
 
     while word_i < n_words {
         let offset = word_i * 2;
-        if compressed_data[offset..(offset + 2)] == [0xCD, 0xAB] {
+        let word_bytes = &compressed_data[offset..(offset + 2)];
+        if word_bytes == [0xCD, 0xAB]  {
             let count = u16::from_le_bytes(
                 compressed_data[(offset + 2)..(offset + 4)]
                     .try_into()
@@ -89,11 +90,63 @@ fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
     output
 }
 
+/// See: https://moddingwiki.shikadi.net/wiki/Carmack_compression
+fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
+    const NEAR_POINTER: u8 = 0xA7;
+    const FAR_POINTER: u8 = 0xA8;
+    let mut output = Vec::new();
+    let mut word_i = 0;
+    let mut n_shifts = 0;
+    let mut offset = 0;
+
+    while offset < compressed_data.len() - 2 {
+
+        match &compressed_data[offset..(offset + 2)] {
+            [0x00, NEAR_POINTER] | [0x00, FAR_POINTER] => {
+                // ignore 0x00 and invert the following word
+                output.push(compressed_data[offset + 2]);
+                output.push(compressed_data[offset + 1]);
+                n_shifts += 1;
+            },
+            [count, NEAR_POINTER] => {
+                let distance = usize::from(compressed_data[offset + 2]);
+                let segment_start = output.len() - distance * 2;
+                let segment_end = segment_start + usize::from(*count) * 2;
+                let segment_to_repeat = output[segment_start..segment_end].to_vec();
+                output.extend_from_slice(&segment_to_repeat);
+                n_shifts += 1;
+            },
+            [count, FAR_POINTER] => {
+                let distance = u16::from_le_bytes(compressed_data[(offset + 2)..(offset + 4)].try_into().unwrap());
+                let segment_start = output.len() - usize::from(distance) * 2;
+                let segment_end = segment_start + usize::from(*count) * 2;
+                let segment_to_repeat = output[segment_start..segment_end].to_vec();
+                output.extend_from_slice(&segment_to_repeat);
+                word_i += 1;
+            },
+            word_bytes => {
+                output.extend_from_slice(&word_bytes);
+            }
+        }
+
+        word_i += 1;
+        offset = word_i * 2 + n_shifts;
+    }
+
+    if offset < compressed_data.len() {
+        let remainder = &compressed_data[offset..];
+        output.extend_from_slice(remainder);
+    }
+    
+    output
+}
+
 fn get_plane(data: &[u8], offset: i32, length: u16) -> Option<Vec<u8>> {
     if offset > 0 {
         let plane_start = offset as usize;
         let plane_end = plane_start + length as usize;
-        Some(rlew_decompress(&data[plane_start..plane_end]))
+        let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
+        Some(rlew_decompress(&decarmackized))
     } else {
         None
     }
@@ -136,16 +189,105 @@ pub fn load_maps(maphead: PathBuf, gamemaps: PathBuf) -> Vec<Map> {
     parse_map_data(gamemaps, metadata)
 }
 
+impl fmt::Display for Map {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let plane = self.plane0.as_ref().unwrap();
+
+        plane
+            .chunks_exact(2)
+            .map(|word| u16::from_le_bytes(word.try_into().unwrap()))
+            .enumerate()
+            .for_each(|(word_i, word)| {
+                let x = word_i % usize::from(self.width_n_tiles);
+                // let y = word_i / usize::from(self.height_n_tiles);
+                write!(f, "{} ", &word).unwrap();
+                if x == usize::from(self.width_n_tiles) - 1 {
+                    writeln!(f).unwrap();
+                }
+            });
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
-    fn dump_map0_plane0() {
+    fn test_rlew_decompress() {
+        // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x03\x04\xFE\xFE\x05\x00\xA0\x0A" > test3.bin
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-rlew-id < test3.bin > rlew_expanded.bin 
+        // marcolugo@MARCO-LUGO bin % xxd rlew_expanded.bin                                         
+        // 00000000: 0001 0304 a00a a00a a00a a00a a00a       ..............
+        assert_eq!(
+            rlew_decompress(&[0x00, 0x01, 0x03, 0x04, 0xFE, 0xFE, 0x05, 0x00, 0xA0, 0x0A]),
+            &[0x00, 0x01, 0x03, 0x04, 0xA0, 0x0A, 0xA0, 0x0A, 0xA0, 0x0A, 0xA0, 0x0A, 0xA0, 0x0A]
+        );
+    }
+
+    #[test]
+    fn test_carmack_decompress_escaped() {
+        // from the provided example: https://moddingwiki.shikadi.net/wiki/Carmack_compression
+        // marcolugo@MARCO-LUGO bin % echo -n "\x00\xA7\x12\xEE\xFF\x00\xA8\x34\xCC\xDD" > test0.bin
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test0.bin > decarmackized0.bin                        
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized0.bin                                           
+        // 00000000: 12a7 eeff 34a8 ccdd                      ....4...
+        assert_eq!(
+            carmack_decompress(&[0x00, 0xA7, 0x12, 0xEE, 0xFF, 0x00, 0xA8, 0x34, 0xCC, 0xDD]),
+            &[0x12, 0xA7, 0xEE, 0xFF, 0x34, 0xA8, 0xCC, 0xDD]
+        );
+    }
+
+    #[test]
+    fn test_carmack_decompress_near_pointer() {
+        // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x04\xA7\x06\x00\x01" > test.bin
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test.bin > decarmackized.bin
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized.bin 
+        // 00000000: 0001 0203 0405 0607 0809 0a0b 0001 0203  ................
+        // 00000010: 0405 0607 0001                           ......
+        assert_eq!(
+            carmack_decompress(
+                &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA7, 0x06, 0x00, 0x01]
+            ),
+            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x01]
+        );
+    }
+
+    #[test]
+    fn test_carmack_decompress_far_pointer() {
+        // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x04\xA8\x06\x00\x01" > test2.bin
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test2.bin > decarmackized2.bin         
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized2.bin                                                                    
+        // 00000000: 0001 0203 0405 0607 0809 0a0b 0001 0203  ................
+        // 00000010: 0405 0607 01                             .....
+        assert_eq!(
+            carmack_decompress(
+                &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA8, 0x06, 0x00, 0x01]
+            ),
+            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x01]
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn dump_map0_plane0_bin() {
         let maps = load_maps(
             "shareware/MAPHEAD.WL1".into(),
             "shareware/GAMEMAPS.WL1".into(),
         );
-        fs::write("test_plane0.bin", maps[0].plane0.as_ref().unwrap()).unwrap();
+        fs::write("test_map0_plane0.bin", maps[0].plane0.as_ref().unwrap()).unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn dump_map0_plane0_printout() {
+        let maps = load_maps(
+            "shareware/MAPHEAD.WL1".into(),
+            "shareware/GAMEMAPS.WL1".into(),
+        );
+        let mut file = fs::File::create("test_map0_plane0.txt").unwrap();
+        write!(file, "{}", maps[0]).unwrap();
     }
 }
