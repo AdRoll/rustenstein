@@ -72,7 +72,7 @@ fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
     while word_i < n_words {
         let offset = word_i * 2;
         let word_bytes = &compressed_data[offset..(offset + 2)];
-        if word_bytes == [0xCD, 0xAB]  {
+        if word_bytes == [0xCD, 0xAB] || word_bytes == [0xFE, 0xFE] {
             let count = u16::from_le_bytes(
                 compressed_data[(offset + 2)..(offset + 4)]
                     .try_into()
