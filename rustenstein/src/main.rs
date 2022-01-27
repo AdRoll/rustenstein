@@ -2,8 +2,7 @@ extern crate sdl2;
 
 use cache::Picture;
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::{Color, PixelFormatEnum};
+use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
@@ -11,6 +10,7 @@ use sdl2::video::WindowContext;
 mod cache;
 mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
+mod input_manager;
 mod map_parser;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
@@ -32,8 +32,10 @@ pub fn main() {
 
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
+    let mut input_manager = input_manager::InputManager::startup(&sdl_context);
+
     let video_subsystem = sdl_context.video().unwrap();
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    // let mut event_pump = sdl_context.event_pump().unwrap();
 
     let color_map = build_color_map();
     let titlepic = pics_cache.get_pic(cache::TITLEPIC);
@@ -49,80 +51,95 @@ pub fn main() {
     let texture_creator = canvas.texture_creator();
     let texture = draw_to_texture(&texture_creator, &titlepic, color_map);
 
-    canvas.copy(&texture, None, None);
+    canvas.copy(&texture, None, None).unwrap();
     canvas.present();
-    wait_for_key(&mut event_pump);
+    input_manager.wait_for_key();
+    let mut control_info = input_manager::ControlInfo::default();
 
-    // fake walls
-    let mut texture = texture_creator
-        .create_texture_streaming(PixelFormatEnum::RGB24, width, view_height)
-        .unwrap();
+    'main_loop: loop {
+        input_manager.read_control(&mut control_info);
 
-    // TODO reduce duplication
-    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        // draw floor and ceiling colors
-        let floor = color_map[VGA_FLOOR_COLOR];
-        let ceiling = color_map[VGA_CEILING_COLORS[level]];
-
-        for x in 0..width {
-            for y in 0..view_height / 2 {
-                put_pixel(buffer, pitch, x, y, ceiling);
-            }
-            for y in view_height / 2..view_height {
-                put_pixel(buffer, pitch, x, y, floor);
-            }
+        // exit if we press ctrl.
+        if control_info.button0 {
+            // TODO: change to a more sensible key
+            break 'main_loop;
         }
 
-        let mut current = (view_height / 8) * 3;
-        let split = 6;
+        // fake walls
+        let mut texture = texture_creator
+            .create_texture_streaming(PixelFormatEnum::RGB24, width, view_height)
+            .unwrap();
 
-        let color = color_map[150];
-        for x in 0..width / split {
-            if x % 4 == 0 {
-                current -= 1
-            }
+        // TODO reduce duplication
+        texture
+            .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                // draw floor and ceiling colors
+                let floor = color_map[VGA_FLOOR_COLOR];
+                let ceiling = color_map[VGA_CEILING_COLORS[level]];
 
-            for y in view_center - current..view_center + current {
-                put_pixel(buffer, pitch, x, y, color);
-            }
-        }
+                for x in 0..width {
+                    for y in 0..view_height / 2 {
+                        put_pixel(buffer, pitch, x, y, ceiling);
+                    }
+                    for y in view_height / 2..view_height {
+                        put_pixel(buffer, pitch, x, y, floor);
+                    }
+                }
 
-        let color = color_map[155];
-        for x in width / split..(width - width / split) {
-            for y in view_center - current..view_center + current {
-                put_pixel(buffer, pitch, x, y, color);
-            }
-        }
+                let mut current = (view_height / 8) * 3;
+                let split = 6;
 
-        let color = color_map[150];
-        for x in width - width / split..width {
-            if x % 4 == 0 {
-                current += 1
-            }
-            for y in view_center - current..view_center + current {
-                put_pixel(buffer, pitch, x, y, color);
-            }
-        }
-    });
+                let color = color_map[150];
+                for x in 0..width / split {
+                    if x % 4 == 0 {
+                        current -= 1
+                    }
 
-    canvas.copy(&texture, None, Rect::new(0, 0, width, view_height));
+                    for y in view_center - current..view_center + current {
+                        put_pixel(buffer, pitch, x, y, color);
+                    }
+                }
 
-    // show status picture
-    let texture = draw_to_texture(&texture_creator, &statuspic, color_map);
-    // I don't know why I had to *5 for the height
-    canvas.copy(
-        &texture,
-        None,
-        Rect::new(
-            0,
-            view_height as i32,
-            width,
-            STATUS_LINES * scale_factor * 5,
-        ),
-    );
+                let color = color_map[155];
+                for x in width / split..(width - width / split) {
+                    for y in view_center - current..view_center + current {
+                        put_pixel(buffer, pitch, x, y, color);
+                    }
+                }
 
-    canvas.present();
-    wait_for_key(&mut event_pump);
+                let color = color_map[150];
+                for x in width - width / split..width {
+                    if x % 4 == 0 {
+                        current += 1
+                    }
+                    for y in view_center - current..view_center + current {
+                        put_pixel(buffer, pitch, x, y, color);
+                    }
+                }
+            })
+            .unwrap();
+
+        canvas
+            .copy(&texture, None, Rect::new(0, 0, width, view_height))
+            .unwrap();
+
+        // show status picture
+        let texture = draw_to_texture(&texture_creator, &statuspic, color_map);
+        // I don't know why I had to *5 for the height
+        canvas
+            .copy(
+                &texture,
+                None,
+                Rect::new(
+                    0,
+                    view_height as i32,
+                    width,
+                    STATUS_LINES * scale_factor * 5,
+                ),
+            )
+            .unwrap();
+        canvas.present();
+    }
 }
 
 fn draw_to_texture<'a>(
@@ -134,17 +151,19 @@ fn draw_to_texture<'a>(
         .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
         .unwrap();
 
-    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        // different from the window size
-        for y in 0..pic.height {
-            for x in 0..pic.width {
-                let source_index =
-                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                let color = pic.data[source_index as usize];
-                put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            // different from the window size
+            for y in 0..pic.height {
+                for x in 0..pic.width {
+                    let source_index =
+                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                    let color = pic.data[source_index as usize];
+                    put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+                }
             }
-        }
-    });
+        })
+        .unwrap();
     texture
 }
 
@@ -154,17 +173,6 @@ fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8
     buffer[offset] = r;
     buffer[offset + 1] = g;
     buffer[offset + 2] = b;
-}
-
-fn wait_for_key(event_pump: &mut sdl2::EventPump) {
-    'running: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
-                _ => {}
-            }
-        }
-    }
 }
 
 /// Returns an array of colors that maps indexes as used by wolf3d graphics
