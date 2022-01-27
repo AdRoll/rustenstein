@@ -1,6 +1,14 @@
 use std::path::PathBuf;
 use std::{fmt, fs};
 
+// TODO: fix loading... currently the 4th map gets index out of bounds error in the
+// RLEW function
+
+// TODO: the maps produced via the dump functions (run with cargo test -- --ignored)
+// make more visual sense now but the size does not (440k bin for map 1 where it should
+// probably be around 64k after seeing some map mods online) the size could provide a clue
+// into what must be fixed so all maps get parsed properly
+
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
 // some map format info: https://moddingwiki.shikadi.net/wiki/GameMaps_Format
 // on the RLEW compression algorithm: https://moddingwiki.shikadi.net/wiki/Id_Software_RLEW_compression
@@ -10,18 +18,19 @@ use std::{fmt, fs};
 
 #[derive(Debug)]
 struct MapHead {
-    magic: u16, // can probably be removed
+    magic: [u8; 2],
     pointers: Vec<i32>,
     title: Vec<u8>, // so far empty in map files we've seen, no idea what to do with this for now... could probably be a string
 }
 
-fn parse_map_head(path: PathBuf) -> MapHead {
+fn parse_map_head(path: PathBuf, keep_n_first: Option<usize>) -> MapHead {
     let raw_data = fs::read(path).expect("could not read MAPHEAD file");
 
     MapHead {
-        magic: u16::from_le_bytes(raw_data[0..2].try_into().unwrap()),
+        magic: raw_data[0..2].try_into().unwrap(),
         pointers: raw_data[2..=(4 * 100)]
             .chunks_exact(4)
+            .take(keep_n_first.unwrap_or(100))
             .map(|x| i32::from_le_bytes(x.try_into().unwrap()))
             .filter(|&x| x > 0)
             .collect(),
@@ -63,8 +72,7 @@ impl MapLevelHeader {
 }
 
 /// See: https://moddingwiki.shikadi.net/wiki/Id_Software_RLEW_compression
-fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
-    // RLEW signature for our WL1 file is 0xABCD in little-endian but 0xFEFE may be used
+fn rlew_decompress(compressed_data: &[u8], magic_word: &[u8; 2]) -> Vec<u8> {
     let mut output = Vec::new();
     let mut word_i = 0;
     let n_words = compressed_data.len() / 2;
@@ -72,7 +80,7 @@ fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
     while word_i < n_words {
         let offset = word_i * 2;
         let word_bytes = &compressed_data[offset..(offset + 2)];
-        if word_bytes == [0xCD, 0xAB] || word_bytes == [0xFE, 0xFE] {
+        if word_bytes == magic_word {
             if word_i + 1 == n_words {
                 dbg!("malformed input?");
                 break;
@@ -148,12 +156,12 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
     output
 }
 
-fn get_plane(data: &[u8], offset: i32, length: u16) -> Option<Vec<u8>> {
+fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -> Option<Vec<u8>> {
     if offset > 0 {
         let plane_start = offset as usize;
         let plane_end = plane_start + length as usize;
         let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
-        Some(rlew_decompress(&decarmackized))
+        Some(rlew_decompress(&decarmackized, magic_rlew_word))
     } else {
         None
     }
@@ -169,18 +177,33 @@ pub struct Map {
     name: String,
 }
 
-fn parse_map_data(path: PathBuf, metadata: MapHead) -> Vec<Map> {
+fn parse_map_data(path: PathBuf, meta: MapHead) -> Vec<Map> {
     let raw_data = fs::read(path).expect("could not read GAMEMAPS file");
     let mut maps = Vec::new();
 
-    for pointer in metadata.pointers {
+    for pointer in meta.pointers {
         let pointer = pointer as usize;
         let header = MapLevelHeader::new(&raw_data[pointer..(pointer + 38)]);
-        // dbg!(&header);
+        dbg!(&header);
         maps.push(Map {
-            plane0: get_plane(&raw_data, header.offset_plane0, header.length_plane0),
-            plane1: get_plane(&raw_data, header.offset_plane1, header.length_plane1),
-            plane2: get_plane(&raw_data, header.offset_plane2, header.length_plane2),
+            plane0: get_plane(
+                &raw_data,
+                header.offset_plane0,
+                header.length_plane0,
+                &meta.magic,
+            ),
+            plane1: get_plane(
+                &raw_data,
+                header.offset_plane1,
+                header.length_plane1,
+                &meta.magic,
+            ),
+            plane2: get_plane(
+                &raw_data,
+                header.offset_plane2,
+                header.length_plane2,
+                &meta.magic,
+            ),
             width_n_tiles: header.width_n_tiles,
             height_n_tiles: header.height_n_tiles,
             name: header.name,
@@ -191,8 +214,8 @@ fn parse_map_data(path: PathBuf, metadata: MapHead) -> Vec<Map> {
 }
 
 /// Made with MAPHEAD.WL1 and GAMEMAPS.WL1 in mind
-pub fn load_maps(maphead: PathBuf, gamemaps: PathBuf) -> Vec<Map> {
-    let metadata = parse_map_head(maphead);
+pub fn load_maps(maphead: PathBuf, gamemaps: PathBuf, keep_n_first: Option<usize>) -> Vec<Map> {
+    let metadata = parse_map_head(maphead, keep_n_first);
     parse_map_data(gamemaps, metadata)
 }
 
@@ -229,7 +252,10 @@ mod tests {
         // marcolugo@MARCO-LUGO bin % xxd rlew_expanded.bin
         // 00000000: 0001 0304 a00a a00a a00a a00a a00a       ..............
         assert_eq!(
-            rlew_decompress(&[0x00, 0x01, 0x03, 0x04, 0xFE, 0xFE, 0x05, 0x00, 0xA0, 0x0A]),
+            rlew_decompress(
+                &[0x00, 0x01, 0x03, 0x04, 0xFE, 0xFE, 0x05, 0x00, 0xA0, 0x0A],
+                &[0xFE, 0xFE]
+            ),
             &[0x00, 0x01, 0x03, 0x04, 0xA0, 0x0A, 0xA0, 0x0A, 0xA0, 0x0A, 0xA0, 0x0A, 0xA0, 0x0A]
         );
     }
@@ -313,6 +339,7 @@ mod tests {
         let maps = load_maps(
             "shareware/MAPHEAD.WL1".into(),
             "shareware/GAMEMAPS.WL1".into(),
+            Some(1),
         );
         fs::write("test_map0_plane0.bin", maps[0].plane0.as_ref().unwrap()).unwrap();
     }
@@ -323,8 +350,9 @@ mod tests {
         let maps = load_maps(
             "shareware/MAPHEAD.WL1".into(),
             "shareware/GAMEMAPS.WL1".into(),
+            Some(1),
         );
-        let mut file = fs::File::create("test_map0_plane0.txt").unwrap();
+        let mut file = fs::File::create("test_map0.txt").unwrap();
         write!(file, "{}", maps[0]).unwrap();
     }
 }
