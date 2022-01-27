@@ -25,8 +25,11 @@ const STATUS_LINES: u32 = 40;
 
 pub fn main() {
     let pics_cache = init();
-    let (width, height) = (640, 400);
+    let (width, height) = (960, 600);
     let scale_factor = width / 320;
+    let view_height = height - STATUS_LINES * scale_factor;
+    let view_center = view_height / 2;
+
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -50,20 +53,76 @@ pub fn main() {
     canvas.present();
     wait_for_key(&mut event_pump);
 
-    // draw floor and ceiling colors
-    let (r, g, b) = color_map[VGA_FLOOR_COLOR];
-    canvas.set_draw_color(Color::RGB(r, g, b));
-    canvas.clear();
+    // fake walls
+    let mut texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, width, view_height)
+        .unwrap();
 
-    let (r, g, b) = color_map[VGA_CEILING_COLORS[level]];
-    canvas.set_draw_color(Color::RGB(r, g, b));
-    canvas.fill_rect(Rect::new(
-        0,
-        0,
-        width,
-        (height - STATUS_LINES * scale_factor) / 2,
-    ));
+    // TODO reduce duplication
+    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+        // draw floor and ceiling colors
+        let (fr, fg, fb) = color_map[VGA_FLOOR_COLOR];
+        let (cr, cg, cb) = color_map[VGA_CEILING_COLORS[level]];
 
+        for x in 0..width {
+            for y in 0..view_height / 2 {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = cr;
+                buffer[offset + 1] = cg;
+                buffer[offset + 2] = cb;
+            }
+            for y in view_height / 2..view_height {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = fr;
+                buffer[offset + 1] = fg;
+                buffer[offset + 2] = fb;
+            }
+        }
+
+        let mut current = (view_height / 8) * 3;
+        let split = 6;
+
+        let (r, g, b) = color_map[150];
+        for x in 0..width / split {
+            if x % 4 == 0 {
+                current -= 1
+            }
+
+            for y in view_center - current..view_center + current {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+
+        let (r, g, b) = color_map[155];
+        for x in width / split..(width - width / split) {
+            for y in view_center - current..view_center + current {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+
+        let (r, g, b) = color_map[150];
+        for x in width - width / split..width {
+            if x % 4 == 0 {
+                current += 1
+            }
+            for y in view_center - current..view_center + current {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+    });
+
+    canvas.copy(&texture, None, Rect::new(0, 0, width, view_height));
+
+    // show status picture
     let texture = draw_to_texture(&texture_creator, &statuspic, color_map);
     // I don't know why I had to *5 for the height
     canvas.copy(
@@ -71,7 +130,7 @@ pub fn main() {
         None,
         Rect::new(
             0,
-            height as i32 - 40 * scale_factor as i32,
+            view_height as i32,
             width,
             STATUS_LINES * scale_factor * 5,
         ),
@@ -112,7 +171,11 @@ fn wait_for_key(event_pump: &mut sdl2::EventPump) {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Q),
+                    ..
+                } => break 'running,
                 _ => {}
             }
         }
