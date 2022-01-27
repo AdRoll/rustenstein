@@ -152,31 +152,29 @@ pub const STARTPICS: usize = 3;
 const DATADIR: &str = "shareware";
 
 pub struct Cache {
-    huff: Vec<(u16,u16)>,
+    huff: Vec<(u16, u16)>,
     headers: Vec<u32>,
-    pics: Vec<Picture>
+    pics: Vec<Picture>,
 }
 
 impl Cache {
-    pub fn new(huff: Vec<(u16,u16)>,
-               headers: Vec<u32>,
-               pics: Vec<Picture>) -> Cache {
+    pub fn new(huff: Vec<(u16, u16)>, headers: Vec<u32>, pics: Vec<Picture>) -> Cache {
         Cache {
             huff: huff,
             headers: headers,
-            pics: pics
+            pics: pics,
         }
     }
 
     pub fn get_pic(&self, index: usize) -> &Picture {
-        &self.pics[index-3]
+        &self.pics[index - 3]
     }
 }
 
 pub struct Picture {
     pub width: u32,
     pub height: u32,
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 pub fn startup() -> Cache {
@@ -184,11 +182,10 @@ pub fn startup() -> Cache {
 }
 
 fn setup_graphics() -> Cache {
-
     let huff_file = fs::read(DATADIR.to_owned() + "/VGADICT.WL1")
         .expect("Something went wrong reading the file");
 
-    let mut huff: Vec<(u16,u16)> = Vec::new();
+    let mut huff: Vec<(u16, u16)> = Vec::new();
 
     for i in huff_file.chunks_exact(4) {
         let bit0 = u16::from_le_bytes([i[0], i[1]]);
@@ -223,16 +220,16 @@ fn setup_graphics() -> Cache {
         pics.push(Picture {
             width: width.try_into().unwrap(),
             height: height.try_into().unwrap(),
-            data: data
-         })
+            data: data,
+        })
     }
 
     Cache::new(huff, headers, pics)
 }
 
-fn huff_expand(huff: &Vec<(u16,u16)>, source: &[u8], length: usize) -> Vec<u8> {
+fn huff_expand(huff: &Vec<(u16, u16)>, source: &[u8], length: usize) -> Vec<u8> {
     let mut dest: Vec<u8> = Vec::new();
-    let headptr = 254;         // head node is always node 254
+    let headptr = 254; // head node is always node 254
     let mut huffptr = headptr;
     let mut i = 0;
 
@@ -240,7 +237,6 @@ fn huff_expand(huff: &Vec<(u16,u16)>, source: &[u8], length: usize) -> Vec<u8> {
     let mut nodeval;
 
     loop {
-
         if (source[i] & mask) == 0 {
             nodeval = huff[huffptr].0;
         } else {
@@ -265,10 +261,15 @@ fn huff_expand(huff: &Vec<(u16,u16)>, source: &[u8], length: usize) -> Vec<u8> {
     dest
 }
 
-fn load_graphic(source: &[u8], headers: &Vec<u32>, huff: &Vec<(u16,u16)>, chunk: usize) -> Vec<u8> {
+fn load_graphic(
+    source: &[u8],
+    headers: &Vec<u32>,
+    huff: &Vec<(u16, u16)>,
+    chunk: usize,
+) -> Vec<u8> {
     let pos = headers[chunk].try_into().unwrap();
-    let end = headers[chunk+1].try_into().unwrap();
+    let end = headers[chunk + 1].try_into().unwrap();
 
-    let length = u32::from_le_bytes(source[pos..pos+4].try_into().unwrap());
-    huff_expand(&huff, &source[pos+4..end], length.try_into().unwrap())
+    let length = u32::from_le_bytes(source[pos..pos + 4].try_into().unwrap());
+    huff_expand(&huff, &source[pos + 4..end], length.try_into().unwrap())
 }

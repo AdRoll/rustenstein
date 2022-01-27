@@ -1,12 +1,12 @@
 extern crate sdl2;
 
+use cache::Picture;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
-use cache::Picture;
 
 mod cache;
 mod map_data;
@@ -63,11 +63,7 @@ pub fn main() {
         (height - STATUS_LINES * scale_factor) / 2,
     ));
 
-    let texture = draw_to_texture(
-        &texture_creator,
-        &statuspic,
-        color_map,
-    );
+    let texture = draw_to_texture(&texture_creator, &statuspic, color_map);
     // I don't know why I had to *5 for the height
     canvas.copy(
         &texture,
@@ -97,7 +93,8 @@ fn draw_to_texture<'a>(
         // different from the window size
         for y in 0..pic.height {
             for x in 0..pic.width {
-                let source_index = (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let source_index =
+                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
                 let color = pic.data[source_index as usize];
                 let (r, g, b) = color_map[color as usize];
                 let offset = y as usize * pitch + x as usize * 3;
@@ -114,11 +111,7 @@ fn wait_for_key(event_pump: &mut sdl2::EventPump) {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'running,
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                 _ => {}
             }
         }
