@@ -11,6 +11,7 @@ use sdl2::video::WindowContext;
 mod cache;
 mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
+mod map_parser;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
 const VGA_CEILING_COLORS: [usize; 60] = [
