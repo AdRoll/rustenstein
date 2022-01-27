@@ -31,7 +31,7 @@ impl Motion {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ControlInfo {
-    button0: bool,
+    pub button0: bool,
     button1: bool,
     button2: bool,
     button3: bool,
@@ -58,13 +58,23 @@ impl Default for ControlInfo {
     }
 }
 
-pub struct InputManager {
-    sdl_context: Sdl,
+pub struct InputManager<'a> {
+    sdl_context: &'a Sdl,
     last_scan: Option<Keycode>,
     current_key: Option<Keycode>,
 }
 
-impl InputManager {
+impl<'a> InputManager<'a> {
+    pub fn wait_for_key(&self) {
+        'running: loop {
+            for event in self.sdl_context.event_pump().unwrap().poll_iter() {
+                match event {
+                    Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                    _ => {}
+                }
+            }
+        }
+    }
     pub fn process_events(&mut self) {
         for event in self.sdl_context.event_pump().unwrap().poll_iter() {
             match event {
@@ -138,7 +148,7 @@ impl InputManager {
     }
 
     /// Starts up the Input Manager
-    pub fn startup(sdl_context: Sdl) -> InputManager {
+    pub fn startup(sdl_context: &Sdl) -> InputManager {
         InputManager {
             sdl_context,
             last_scan: None,
@@ -158,18 +168,10 @@ impl InputManager {
         self.process_events();
         if let Some(keycode) = self.current_key {
             match keycode {
-                Keycode::Left => {
-                    mx = Motion::Left;
-                }
-                Keycode::Right => {
-                    mx = Motion::Right;
-                }
-                Keycode::Up => {
-                    my = Motion::Up;
-                }
-                Keycode::Down => {
-                    my = Motion::Down;
-                }
+                Keycode::Left => mx = Motion::Left,
+                Keycode::Right => mx = Motion::Right,
+                Keycode::Up => my = Motion::Up,
+                Keycode::Down => my = Motion::Down,
                 Keycode::LCtrl | Keycode::RCtrl => {
                     // button0
                     buttons += 1 << 0;
@@ -198,7 +200,6 @@ impl InputManager {
                     mx = Motion::Left;
                     my = Motion::Up;
                 }
-
                 _ => {}
             }
 
