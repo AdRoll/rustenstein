@@ -649,36 +649,41 @@ pub const E1_M1_ACTORS: [[u8; 64]; 64] = [
     ],
 ];
 
-
 pub enum Tile {
     Floor,
     Wall(u8),
-    Door{vertical: bool, lock: u8},
+    Door { vertical: bool, lock: u8 },
 }
 
 pub enum Direction {
     North,
     East,
     South,
-    West
+    West,
 }
 
 pub enum Actor {
     Player(Direction),
     Enemy, // TODO differentiate enemy types
-    Item, // TODO differentiate item types
+    Item,  // TODO differentiate item types
     DeadGuard,
-    PushWall
+    PushWall,
 }
 
 pub fn tile_at(x: u8, y: u8) -> Tile {
     let tile = E1_M1_TILES[x as usize][y as usize];
     match tile {
-        90 | 92 | 94 | 96 | 98 | 100 => Tile::Door{vertical: true, lock: (tile - 90) / 2},
-        91 | 93 | 95 | 97 | 99 | 101 => Tile::Door{vertical: false, lock: (tile - 91) / 2},
+        90 | 92 | 94 | 96 | 98 | 100 => Tile::Door {
+            vertical: true,
+            lock: (tile - 90) / 2,
+        },
+        91 | 93 | 95 | 97 | 99 | 101 => Tile::Door {
+            vertical: false,
+            lock: (tile - 91) / 2,
+        },
         106 => Tile::Floor, // this one is actually an ambush tile, review if we need to do something with it
         n if n < 107 => Tile::Wall(tile), // keep the tile number to find the proper texture
-        _ => Tile::Floor
+        _ => Tile::Floor,
     }
 }
 
@@ -692,6 +697,6 @@ pub fn actor_at(x: u8, y: u8) -> Option<Actor> {
         98 => Some(Actor::PushWall),
         124 => Some(Actor::DeadGuard),
         n if n >= 108 => Some(Actor::Enemy),
-        _ => None
+        _ => None,
     }
 }

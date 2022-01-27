@@ -1,24 +1,43 @@
 extern crate sdl2;
 
+use cache::Picture;
 use sdl2::event::Event;
-use sdl2::pixels::Color;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
+use sdl2::render::{Texture, TextureCreator};
+use sdl2::video::WindowContext;
 
+mod cache;
 mod map_data;
+type ColorMap = [(u8, u8, u8); 256];
 mod map_parser;
 
-const VGA_FLOOR_COLOR: u32 = 0x19;
-const VGA_CEILING_COLORS: [u32; 60] = [
+const VGA_FLOOR_COLOR: usize = 0x19;
+const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0xbf, 0x4e, 0x4e, 0x4e, 0x1d, 0x8d, 0x4e,
     0x1d, 0x2d, 0x1d, 0x8d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x2d, 0xdd, 0x1d, 0x1d, 0x98, 0x1d, 0x9d,
     0x2d, 0xdd, 0xdd, 0x9d, 0x2d, 0x4d, 0x1d, 0xdd, 0x7d, 0x1d, 0x2d, 0x2d, 0xdd, 0xd7, 0x1d, 0x1d,
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
 
+const STATUS_LINES: u32 = 40;
+
 pub fn main() {
+    let pics_cache = init();
     let (width, height) = (960, 600);
+    let scale_factor = width / 320;
+    let view_height = height - STATUS_LINES * scale_factor;
+    let view_center = view_height / 2;
+
+    let level = 0;
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let color_map = build_color_map();
+    let titlepic = pics_cache.get_pic(cache::TITLEPIC);
+    let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -27,31 +46,147 @@ pub fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    let palette = build_palette();
+    let texture_creator = canvas.texture_creator();
+    let texture = draw_to_texture(&texture_creator, &titlepic, color_map);
 
-    // clear the screen with
-    canvas.set_draw_color(palette[VGA_FLOOR_COLOR as usize]);
-    canvas.clear();
-    canvas.set_draw_color(palette[VGA_CEILING_COLORS[0] as usize]);
-    canvas
-        .fill_rect(Rect::new(0, 0, width, height / 2))
-        .unwrap();
+    canvas.copy(&texture, None, None);
     canvas.present();
+    wait_for_key(&mut event_pump);
 
-    // wait for any key to quit the program
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    // fake walls
+    let mut texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, width, view_height)
+        .unwrap();
+
+    // TODO reduce duplication
+    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+        // draw floor and ceiling colors
+        let (fr, fg, fb) = color_map[VGA_FLOOR_COLOR];
+        let (cr, cg, cb) = color_map[VGA_CEILING_COLORS[level]];
+
+        for x in 0..width {
+            for y in 0..view_height / 2 {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = cr;
+                buffer[offset + 1] = cg;
+                buffer[offset + 2] = cb;
+            }
+            for y in view_height / 2..view_height {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = fr;
+                buffer[offset + 1] = fg;
+                buffer[offset + 2] = fb;
+            }
+        }
+
+        let mut current = (view_height / 8) * 3;
+        let split = 6;
+
+        let (r, g, b) = color_map[150];
+        for x in 0..width / split {
+            if x % 4 == 0 {
+                current -= 1
+            }
+
+            for y in view_center - current..view_center + current {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+
+        let (r, g, b) = color_map[155];
+        for x in width / split..(width - width / split) {
+            for y in view_center - current..view_center + current {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+
+        let (r, g, b) = color_map[150];
+        for x in width - width / split..width {
+            if x % 4 == 0 {
+                current += 1
+            }
+            for y in view_center - current..view_center + current {
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+    });
+
+    canvas.copy(&texture, None, Rect::new(0, 0, width, view_height));
+
+    // show status picture
+    let texture = draw_to_texture(&texture_creator, &statuspic, color_map);
+    // I don't know why I had to *5 for the height
+    canvas.copy(
+        &texture,
+        None,
+        Rect::new(
+            0,
+            view_height as i32,
+            width,
+            STATUS_LINES * scale_factor * 5,
+        ),
+    );
+
+    canvas.present();
+    wait_for_key(&mut event_pump);
+}
+
+fn draw_to_texture<'a>(
+    texture_creator: &'a TextureCreator<WindowContext>,
+    pic: &'a Picture,
+    color_map: ColorMap,
+) -> Texture<'a> {
+    let mut texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
+        .unwrap();
+
+    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+        // different from the window size
+        for y in 0..pic.height {
+            for x in 0..pic.width {
+                let source_index =
+                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let color = pic.data[source_index as usize];
+                let (r, g, b) = color_map[color as usize];
+                let offset = y as usize * pitch + x as usize * 3;
+                buffer[offset] = r;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = b;
+            }
+        }
+    });
+    texture
+}
+
+fn wait_for_key(event_pump: &mut sdl2::EventPump) {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Q),
+                    ..
+                } => break 'running,
                 _ => {}
             }
         }
     }
 }
 
-pub fn build_palette() -> [Color; 256] {
-    let colors = [
+/// Returns an array of colors that maps indexes as used by wolf3d graphics
+/// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.
+fn build_color_map() -> ColorMap {
+    // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
+    let palette = [
         (0, 0, 0),
         (0, 0, 42),
         (0, 42, 0),
@@ -309,12 +444,15 @@ pub fn build_palette() -> [Color; 256] {
         (0, 27, 27),
         (38, 0, 34),
     ];
-    // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
-    colors.map(|(r, g, b)| {
-        Color::RGB(
+    palette.map(|(r, g, b)| {
+        (
             (r * 255 / 63) as u8,
             (g * 255 / 63) as u8,
             (b * 255 / 63) as u8,
         )
     })
+}
+
+fn init() -> cache::Cache {
+    cache::startup()
 }
