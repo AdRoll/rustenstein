@@ -145,7 +145,7 @@ pub const MUTANTBJPIC: usize = 144;
 pub const PAUSEDPIC: usize = 145;
 pub const GETPSYCHEDPIC: usize = 146;
 
-pub const NUMCHUNKS: u32 = 556;
+pub const NUMCHUNKS: u32 = 161;
 pub const NUMPICS: usize = 144;
 pub const STARTPICS: usize = 3;
 
@@ -208,21 +208,48 @@ fn setup_graphics() -> Cache {
         .expect("Something went wrong reading the file");
 
     let a = headers[1] as usize;
-    let pictable_bytes = huff_expand(&huff, &graph_file[4..a], NUMPICS * 4);
+    let pictable_bytes = huff_expand(&huff, &graph_file[4..a], (NUMPICS + 3) * 4);
 
     let mut pics: Vec<Picture> = Vec::new();
 
-    for chunk in STARTPICS..NUMPICS {
+    for chunk in STARTPICS..GETPSYCHEDPIC + 1 {
         let i = (chunk - STARTPICS) * 4;
         let width = u16::from_le_bytes([pictable_bytes[i], pictable_bytes[i + 1]]);
         let height = u16::from_le_bytes([pictable_bytes[i + 2], pictable_bytes[i + 3]]);
         let data = load_graphic(&graph_file, &headers, &huff, chunk);
+
         pics.push(Picture {
-            width: width.try_into().unwrap(),
-            height: height.try_into().unwrap(),
+            width: width as u32,
+            height: height as u32,
             data: data,
         })
     }
+
+    let vswap_file = fs::read(DATADIR.to_owned() + "/VSWAP.WL1")
+        .expect("Something went wrong reading the file");
+
+    let chunks_in_file = u16::from_le_bytes([vswap_file[0], vswap_file[1]]) as usize;
+    let pm_sprite_start = u16::from_le_bytes([vswap_file[2], vswap_file[3]]) as usize;
+    let pm_sound_start = u16::from_le_bytes([vswap_file[4], vswap_file[5]]) as usize;
+    let mut page_offsets: Vec<u32> = Vec::new();
+    let mut page_lengths: Vec<u16> = Vec::new();
+    let offsets_start = 6;
+    let offsets_end = offsets_start + 4 * (chunks_in_file + 1);
+    let lengths_start = offsets_end;
+    let lengths_end = lengths_start + 2 * chunks_in_file;
+
+    for i in vswap_file[offsets_start..offsets_end].chunks_exact(4) {
+        let offset = u32::from_le_bytes(i.try_into().unwrap());
+        page_offsets.push(offset);
+    }
+
+    for i in vswap_file[lengths_start..lengths_end].chunks_exact(2) {
+        let length = u16::from_le_bytes(i.try_into().unwrap());
+        page_lengths.push(length);
+    }
+
+    // TODO: Esteban
+    // We need to read the rest of the file from here, and add it to the Cache state and build a function to retrieve them
 
     Cache::new(huff, headers, pics)
 }
@@ -267,8 +294,8 @@ fn load_graphic(
     huff: &Vec<(u16, u16)>,
     chunk: usize,
 ) -> Vec<u8> {
-    let pos = headers[chunk].try_into().unwrap();
-    let end = headers[chunk + 1].try_into().unwrap();
+    let pos = headers[chunk] as usize;
+    let end = headers[chunk + 1] as usize;
 
     let length = u32::from_le_bytes(source[pos..pos + 4].try_into().unwrap());
     huff_expand(&huff, &source[pos + 4..end], length.try_into().unwrap())
