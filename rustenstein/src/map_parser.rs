@@ -73,6 +73,10 @@ fn rlew_decompress(compressed_data: &[u8]) -> Vec<u8> {
         let offset = word_i * 2;
         let word_bytes = &compressed_data[offset..(offset + 2)];
         if word_bytes == [0xCD, 0xAB] || word_bytes == [0xFE, 0xFE] {
+            if word_i + 1 == n_words {
+                dbg!("malformed input?");
+                break;
+            }
             let count = u16::from_le_bytes(
                 compressed_data[(offset + 2)..(offset + 4)]
                     .try_into()
@@ -100,14 +104,13 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
     let mut offset = 0;
 
     while offset < compressed_data.len() - 2 {
-
         match &compressed_data[offset..(offset + 2)] {
             [0x00, NEAR_POINTER] | [0x00, FAR_POINTER] => {
                 // ignore 0x00 and invert the following word
                 output.push(compressed_data[offset + 2]);
                 output.push(compressed_data[offset + 1]);
                 n_shifts += 1;
-            },
+            }
             [count, NEAR_POINTER] => {
                 let distance = usize::from(compressed_data[offset + 2]);
                 let segment_start = output.len() - distance * 2;
@@ -115,15 +118,19 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
                 let segment_to_repeat = output[segment_start..segment_end].to_vec();
                 output.extend_from_slice(&segment_to_repeat);
                 n_shifts += 1;
-            },
+            }
             [count, FAR_POINTER] => {
-                let distance = u16::from_le_bytes(compressed_data[(offset + 2)..(offset + 4)].try_into().unwrap());
+                let distance = u16::from_le_bytes(
+                    compressed_data[(offset + 2)..(offset + 4)]
+                        .try_into()
+                        .unwrap(),
+                );
                 let segment_start = output.len() - usize::from(distance) * 2;
                 let segment_end = segment_start + usize::from(*count) * 2;
                 let segment_to_repeat = output[segment_start..segment_end].to_vec();
                 output.extend_from_slice(&segment_to_repeat);
                 word_i += 1;
-            },
+            }
             word_bytes => {
                 output.extend_from_slice(&word_bytes);
             }
@@ -137,7 +144,7 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
         let remainder = &compressed_data[offset..];
         output.extend_from_slice(remainder);
     }
-    
+
     output
 }
 
@@ -218,8 +225,8 @@ mod tests {
     #[test]
     fn test_rlew_decompress() {
         // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x03\x04\xFE\xFE\x05\x00\xA0\x0A" > test3.bin
-        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-rlew-id < test3.bin > rlew_expanded.bin 
-        // marcolugo@MARCO-LUGO bin % xxd rlew_expanded.bin                                         
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-rlew-id < test3.bin > rlew_expanded.bin
+        // marcolugo@MARCO-LUGO bin % xxd rlew_expanded.bin
         // 00000000: 0001 0304 a00a a00a a00a a00a a00a       ..............
         assert_eq!(
             rlew_decompress(&[0x00, 0x01, 0x03, 0x04, 0xFE, 0xFE, 0x05, 0x00, 0xA0, 0x0A]),
@@ -231,8 +238,8 @@ mod tests {
     fn test_carmack_decompress_escaped() {
         // from the provided example: https://moddingwiki.shikadi.net/wiki/Carmack_compression
         // marcolugo@MARCO-LUGO bin % echo -n "\x00\xA7\x12\xEE\xFF\x00\xA8\x34\xCC\xDD" > test0.bin
-        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test0.bin > decarmackized0.bin                        
-        // marcolugo@MARCO-LUGO bin % xxd decarmackized0.bin                                           
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test0.bin > decarmackized0.bin
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized0.bin
         // 00000000: 12a7 eeff 34a8 ccdd                      ....4...
         assert_eq!(
             carmack_decompress(&[0x00, 0xA7, 0x12, 0xEE, 0xFF, 0x00, 0xA8, 0x34, 0xCC, 0xDD]),
@@ -244,29 +251,59 @@ mod tests {
     fn test_carmack_decompress_near_pointer() {
         // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x04\xA7\x06\x00\x01" > test.bin
         // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test.bin > decarmackized.bin
-        // marcolugo@MARCO-LUGO bin % xxd decarmackized.bin 
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized.bin
         // 00000000: 0001 0203 0405 0607 0809 0a0b 0001 0203  ................
         // 00000010: 0405 0607 0001                           ......
         assert_eq!(
-            carmack_decompress(
-                &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA7, 0x06, 0x00, 0x01]
-            ),
-            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x01]
+            carmack_decompress(&[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA7,
+                0x06, 0x00, 0x01
+            ]),
+            &[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01,
+                0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x01
+            ]
         );
     }
 
     #[test]
     fn test_carmack_decompress_far_pointer() {
         // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x04\xA8\x06\x00\x01" > test2.bin
-        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test2.bin > decarmackized2.bin         
-        // marcolugo@MARCO-LUGO bin % xxd decarmackized2.bin                                                                    
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test2.bin > decarmackized2.bin
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized2.bin
         // 00000000: 0001 0203 0405 0607 0809 0a0b 0001 0203  ................
         // 00000010: 0405 0607 01                             .....
         assert_eq!(
-            carmack_decompress(
-                &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA8, 0x06, 0x00, 0x01]
-            ),
-            &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x01]
+            carmack_decompress(&[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA8,
+                0x06, 0x00, 0x01
+            ]),
+            &[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01,
+                0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x01
+            ]
+        );
+    }
+
+    #[test]
+    fn test_carmack_decompress() {
+        // marcolugo@MARCO-LUGO bin % echo -n "\xEA\xEB\xEC\x00\xA7\x14\xDE\xFA\x00\xA8\x34\xCC\xDD\xAB\x01\x03\xA7\x07\x00\x02\xA8\x0A\x00\x02\x02\x03\xFF\x0A\x2A\x00\xA7\xFF" > test5.bin
+        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test5.bin > decarmackized5.bin
+        // marcolugo@MARCO-LUGO bin % xxd decarmackized5.bin
+        // 00000000: eaeb ec00 a714 defa 34a8 ccdd ab01 eaeb  ........4.......
+        // 00000010: ec00 a714 0002 a80a 0002 0203 ff0a 2a00  ..............*.
+        // 00000020: a7ff                                     ..
+        assert_eq!(
+            carmack_decompress(&[
+                0xEA, 0xEB, 0xEC, 0x00, 0xA7, 0x14, 0xDE, 0xFA, 0x00, 0xA8, 0x34, 0xCC, 0xDD, 0xAB,
+                0x01, 0x03, 0xA7, 0x07, 0x00, 0x02, 0xA8, 0x0A, 0x00, 0x02, 0x02, 0x03, 0xFF, 0x0A,
+                0x2A, 0x00, 0xA7, 0xFF
+            ]),
+            &[
+                0xEA, 0xEB, 0xEC, 0x00, 0xA7, 0x14, 0xDE, 0xFA, 0x34, 0xA8, 0xCC, 0xDD, 0xAB, 0x01,
+                0xEA, 0xEB, 0xEC, 0x00, 0xA7, 0x14, 0x00, 0x02, 0xA8, 0x0A, 0x00, 0x02, 0x02, 0x03,
+                0xFF, 0x0A, 0x2A, 0x00, 0xA7, 0xFF
+            ]
         );
     }
 
