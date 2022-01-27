@@ -31,7 +31,7 @@ impl Motion {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ControlInfo {
-    pub button0: bool,
+    button0: bool,
     button1: bool,
     button2: bool,
     button3: bool,
@@ -62,9 +62,14 @@ pub struct InputManager<'a> {
     sdl_context: &'a Sdl,
     last_scan: Option<Keycode>,
     current_key: Option<Keycode>,
+    should_exit: bool,
 }
 
 impl<'a> InputManager<'a> {
+    pub fn should_exit(&self) -> bool {
+        self.should_exit
+    }
+    
     pub fn wait_for_key(&self) {
         'running: loop {
             for event in self.sdl_context.event_pump().unwrap().poll_iter() {
@@ -79,7 +84,7 @@ impl<'a> InputManager<'a> {
         for event in self.sdl_context.event_pump().unwrap().poll_iter() {
             match event {
                 Event::Quit { .. } => {
-                    panic!()
+                    self.should_exit = true;
                 }
                 Event::KeyDown { keycode, .. } => {
                     // check for keypresses
@@ -153,6 +158,7 @@ impl<'a> InputManager<'a> {
             sdl_context,
             last_scan: None,
             current_key: None,
+            should_exit: false,
         }
     }
 

@@ -62,9 +62,7 @@ pub fn main() {
     'main_loop: loop {
         input_manager.read_control(&mut control_info);
 
-        // exit if we press ctrl.
-        if control_info.button0 {
-            // TODO: change to a more sensible key
+        if input_manager.should_exit() {
             break 'main_loop;
         }
 
