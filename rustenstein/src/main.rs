@@ -49,7 +49,10 @@ pub fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
-    let texture = draw_to_texture(&texture_creator, &titlepic, color_map);
+    let mut texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
+        .unwrap();
+    draw_to_texture(&mut texture, &titlepic, color_map);
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
@@ -124,7 +127,10 @@ pub fn main() {
             .unwrap();
 
         // show status picture
-        let texture = draw_to_texture(&texture_creator, &statuspic, color_map);
+        let mut texture = texture_creator
+            .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
+            .unwrap();
+        draw_to_texture(&mut texture, &statuspic, color_map);
         // I don't know why I had to *5 for the height
         canvas
             .copy(
@@ -142,29 +148,18 @@ pub fn main() {
     }
 }
 
-fn draw_to_texture<'a>(
-    texture_creator: &'a TextureCreator<WindowContext>,
-    pic: &'a Picture,
-    color_map: ColorMap,
-) -> Texture<'a> {
-    let mut texture = texture_creator
-        .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
-        .unwrap();
-
-    texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            // different from the window size
-            for y in 0..pic.height {
-                for x in 0..pic.width {
-                    let source_index =
-                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                    let color = pic.data[source_index as usize];
-                    put_pixel(buffer, pitch, x, y, color_map[color as usize]);
-                }
+fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
+    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+        // different from the window size
+        for y in 0..pic.height {
+            for x in 0..pic.width {
+                let source_index =
+                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let color = pic.data[source_index as usize];
+                put_pixel(buffer, pitch, x, y, color_map[color as usize]);
             }
-        })
-        .unwrap();
-    texture
+        }
+    });
 }
 
 fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8)) {
