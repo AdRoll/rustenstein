@@ -49,7 +49,7 @@ pub fn main() {
     let titlepic = pics_cache.get_pic(cache::TITLEPIC);
     let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
     // FIXME not really the weapon
-    let (weapon_shape, weapon_data) = pics_cache.get_sprite(100);
+    let (weapon_shape, weapon_data) = pics_cache.get_sprite(209);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
