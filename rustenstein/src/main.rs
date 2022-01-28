@@ -29,6 +29,7 @@ const VGA_CEILING_COLORS: [usize; 60] = [
 ];
 
 const STATUS_LINES: u32 = 40;
+const DARKNESS: f64 = 0.75;
 
 pub fn main() {
     let pics_cache = init();
@@ -102,20 +103,11 @@ pub fn main() {
 
                 for x in 0..pix_width {
                     for y in 0..pix_height / 2 {
-                        let (r, g, b) = ceiling;
-                        let rs = (((vm - y) * r as u32) / vm) as u8;
-                        let gs = (((vm - y) * g as u32) / vm) as u8;
-                        let bs = (((vm - y) * b as u32) / vm) as u8;
-                        let ceilings = (rs, gs, bs);
-
+                        let ceilings = darken_color(ceiling, vm - y, pix_center);
                         put_pixel(buffer, pitch, x, y, ceilings);
                     }
                     for y in pix_height / 2..pix_height {
-                        let (r, g, b) = floor;
-                        let rs = (((y -vm) * r as u32) / vm) as u8;
-                        let gs = (((y -vm) * g as u32) / vm) as u8;
-                        let bs = (((y -vm) * b as u32) / vm) as u8;
-                        let floors = (rs, gs, bs);
+                        let floors = darken_color(floor, y - vm, pix_center);
                         put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
@@ -132,12 +124,7 @@ pub fn main() {
                     };
 
                     // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                    let (r,g, b) =  color;
-
-                    let rs = ((current * r as u32 * 2) / vm) as u8;
-                    let gs = ((current * g as u32 * 2) / vm) as u8;
-                    let bs = ((current * b as u32 * 2) / vm) as u8;
-                    color = (rs, gs, bs);
+                    color = darken_color(color, current, pix_center);
 
                     for y in pix_center - current..pix_center + current {
                         put_pixel(buffer, pitch, x, y, color);
@@ -176,6 +163,15 @@ pub fn main() {
         canvas.present();
         // break 'main_loop;
     }
+}
+
+fn darken_color(color: (u8,u8,u8), lightness: u32, max: u32) -> (u8,u8,u8) {
+    let (r,g, b) =  color;
+    let factor = lightness as f64 / max as f64 / DARKNESS;
+    let rs = (r as f64 * factor) as u8;
+    let gs = (g as f64 * factor) as u8;
+    let bs = (b as f64 * factor) as u8;
+    (rs, gs, bs)
 }
 
 fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
