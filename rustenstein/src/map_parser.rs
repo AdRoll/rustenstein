@@ -75,13 +75,13 @@ impl MapLevelHeader {
 fn rlew_decompress(compressed_data: &[u8], magic_word: &[u8; 2]) -> Vec<u8> {
     let mut output = Vec::new();
     let mut word_i = 0;
-    let n_words = compressed_data.len() / 2;
+    let n_words_max = compressed_data.len() / 2;
 
-    while word_i < n_words {
+    while word_i < n_words_max {
         let offset = word_i * 2;
         let word_bytes = &compressed_data[offset..(offset + 2)];
         if word_bytes == magic_word {
-            if word_i + 1 == n_words {
+            if word_i + 1 == n_words_max {
                 dbg!("malformed input?");
                 break;
             }
@@ -98,8 +98,8 @@ fn rlew_decompress(compressed_data: &[u8], magic_word: &[u8; 2]) -> Vec<u8> {
             word_i += 1;
         }
     }
-
-    output
+    // TODO: remove/revisit this ugly and inefficient hack for testing...
+    output.into_iter().take(64 * 64 * 2).collect()
 }
 
 /// See: https://moddingwiki.shikadi.net/wiki/Carmack_compression
@@ -161,7 +161,7 @@ fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -
         let plane_start = offset as usize;
         let plane_end = plane_start + length as usize;
         let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
-        Some(rlew_decompress(&decarmackized, magic_rlew_word))
+        Some(rlew_decompress(&decarmackized[4..], magic_rlew_word))
     } else {
         None
     }
@@ -230,7 +230,12 @@ impl fmt::Display for Map {
             .for_each(|(word_i, word)| {
                 let x = word_i % usize::from(self.width_n_tiles);
                 // let y = word_i / usize::from(self.height_n_tiles);
-                write!(f, "{} ", &word).unwrap();
+                if word < 107 {
+                    write!(f, "\u{25A0}").unwrap();
+                } else {
+                    write!(f, " ").unwrap();
+                }
+                // write!(f, "{} ", &word).unwrap();
                 if x == usize::from(self.width_n_tiles) - 1 {
                     writeln!(f).unwrap();
                 }
