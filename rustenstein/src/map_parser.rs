@@ -184,7 +184,7 @@ fn parse_map_data(path: PathBuf, meta: MapHead) -> Vec<Map> {
     for pointer in meta.pointers {
         let pointer = pointer as usize;
         let header = MapLevelHeader::new(&raw_data[pointer..(pointer + 38)]);
-        dbg!(&header);
+
         maps.push(Map {
             plane0: get_plane(
                 &raw_data,
@@ -297,25 +297,6 @@ mod tests {
             &[
                 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01,
                 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x01
-            ]
-        );
-    }
-
-    #[test]
-    fn test_carmack_decompress_far_pointer() {
-        // marcolugo@MARCO-LUGO bin % echo -n "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x04\xA8\x06\x00\x01" > test2.bin
-        // marcolugo@MARCO-LUGO bin % node gamecomp.js -cmp-carmackize < test2.bin > decarmackized2.bin
-        // marcolugo@MARCO-LUGO bin % xxd decarmackized2.bin
-        // 00000000: 0001 0203 0405 0607 0809 0a0b 0001 0203  ................
-        // 00000010: 0405 0607 01                             .....
-        assert_eq!(
-            carmack_decompress(&[
-                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x04, 0xA8,
-                0x06, 0x00, 0x01
-            ]),
-            &[
-                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x00, 0x01,
-                0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x01
             ]
         );
     }
