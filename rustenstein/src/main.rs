@@ -38,7 +38,7 @@ pub fn main() {
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 150.0, 400.0, 0.3, pix_width, pix_height);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
