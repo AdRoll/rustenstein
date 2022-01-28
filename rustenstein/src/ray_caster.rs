@@ -204,7 +204,8 @@ fn draw_rays<T: RenderTarget>(canvas: &mut Canvas<T>,
         };
         draw_ray(canvas, player, hit, Color::WHITE);
         let (_,_,distance,tile) = hit;
-        let ray_height = (TILE_SIZE * n_rays) as f64 / distance;
+        let adj_distance = distance * offset.cos();
+        let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
         hits.push(RayHit{ height: min(height, ray_height as u32),
                           tile: tile,
                           horizontal: horiz });
