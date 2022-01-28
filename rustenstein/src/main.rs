@@ -106,7 +106,7 @@ pub fn main() {
                         color_map[155]
                     };
                     let current = match ray_hits[x as usize].height {
-                        rh if rh > pix_center => { 0 },
+                        rh if rh > pix_center => { pix_center },
                         rh => { rh }
                     };
                     for y in pix_center - current..pix_center + current {
