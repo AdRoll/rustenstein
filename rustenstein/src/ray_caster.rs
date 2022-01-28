@@ -93,6 +93,23 @@ impl RayCaster {
         }
     }
 
+    pub fn wait_for_key(&mut self) {
+        'running: loop {
+            for event in self.event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                    _ => {
+                        draw_map(&mut self.canvas);
+                        let hits = draw_rays(&mut self.canvas, &mut self.player,
+                                             self.view3d_height, self.view3d_width);
+                        draw_player(&mut self.canvas, &mut self.player);
+                        self.canvas.present();
+                    }
+                }
+            }
+        }
+    }
+
     pub fn tick(&mut self) -> Result<Vec<RayHit>, &str> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
@@ -330,3 +347,4 @@ fn norm_angle(a:f64) -> f64 {
 fn distance(player: &mut Player, x: f64, y: f64) -> f64 {
     (pow(x-player.x,2) + pow(y-player.y,2)).sqrt()
 }
+
