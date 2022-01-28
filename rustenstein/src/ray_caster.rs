@@ -195,7 +195,7 @@ fn draw_rays<T: RenderTarget>(canvas: &mut Canvas<T>,
     let step_angle = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits : Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
-        let offset = (i as f64)*step_angle - FIELD_OF_VIEW / 2.0;
+        let offset =  FIELD_OF_VIEW / 2.0 - (i as f64)*step_angle;
         let ray_h = cast_ray_h(canvas, player, offset);
         let ray_v = cast_ray_v(canvas, player, offset);
         let (hit,horiz) = match (ray_h, ray_v) {
