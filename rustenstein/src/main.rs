@@ -139,7 +139,6 @@ pub fn main() {
                     }
                 }
 
-                println!("{} {} {}", width, view_height, pitch);
                 simple_scale_shape(pix_width, pix_height, color_map, buffer, pitch,
                                    weapon_shape.left_pix, weapon_shape.right_pix, &weapon_shape.dataofs,
                                    &weapon_data);
