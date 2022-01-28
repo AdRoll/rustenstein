@@ -6,6 +6,7 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, RenderTarget};
 use sdl2::video::WindowContext;
+use std::time::Instant;
 
 mod cache;
 mod map_data;
@@ -24,9 +25,12 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
 
+const TEXTURE_WIDTH: u32 = 320;
+const TEXTURE_HEIGHT: u32 = 200;
 const STATUS_LINES: u32 = 40;
 
 pub fn main() {
+    let start_time = Instant::now();
     let pics_cache = init();
     let (width, height, pix_width) = (960, 600, 320);
     let scale_factor = width / pix_width;
@@ -45,6 +49,9 @@ pub fn main() {
     let color_map = build_color_map();
     let titlepic = pics_cache.get_pic(cache::TITLEPIC);
     let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
+    let default_facepic = pics_cache.get_pic(cache::FACE1APIC);
+    let lefteye_facepic = pics_cache.get_pic(cache::FACE1BPIC);
+    let righteye_facepic = pics_cache.get_pic(cache::FACE1CPIC);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -122,9 +129,19 @@ pub fn main() {
 
         // show status picture
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
+            .create_texture_streaming(PixelFormatEnum::RGB24, TEXTURE_WIDTH, TEXTURE_HEIGHT)
             .unwrap();
+
         draw_to_texture(&mut texture, &statuspic, color_map);
+        
+        let face_to_draw = match start_time.elapsed().as_secs() % 3 {
+            0 => default_facepic,
+            1 => lefteye_facepic,
+            2 => righteye_facepic,
+            _ => unreachable!(),
+        };
+        draw_face_to_texture(&mut texture, &face_to_draw, color_map);
+
         // I don't know why I had to *5 for the height
         canvas
             .copy(
@@ -151,6 +168,23 @@ fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
                     (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
                 let color = pic.data[source_index as usize];
                 put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+            }
+        }
+    });
+}
+
+fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
+    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+
+        let shift_x = TEXTURE_WIDTH / 2 - pic.width;
+        let shift_y = pic.height / 8;
+        // different from the window size
+        for y in 0..pic.height {
+            for x in 0..pic.width {
+                let source_index =
+                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let color = pic.data[source_index as usize];
+                put_pixel(buffer, pitch, x + shift_x, y + shift_y, color_map[color as usize]);
             }
         }
     });
