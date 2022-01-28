@@ -6,7 +6,7 @@ use cache::Picture;
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::render::{Texture, TextureCreator};
+use sdl2::render::{Texture, RenderTarget};
 use sdl2::video::WindowContext;
 use core::slice::Iter;
 
@@ -15,6 +15,9 @@ mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
 mod input_manager;
 mod map_parser;
+mod ray_caster;
+
+use crate::ray_caster::RayHit;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
 const VGA_CEILING_COLORS: [usize; 60] = [
@@ -28,15 +31,17 @@ const STATUS_LINES: u32 = 40;
 
 pub fn main() {
     let pics_cache = init();
-    let (width, height) = (960, 600);
-    let scale_factor = width / 320;
+    let (width, height, pix_width) = (960, 600, 320);
+    let scale_factor = width / pix_width;
     let view_height = height - STATUS_LINES * scale_factor;
     let view_center = view_height / 2;
+    let pix_height = view_height / scale_factor;
+    let pix_center = view_height / scale_factor / 2;
 
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
-    let mut input_manager = input_manager::InputManager::startup(&sdl_context);
-
+    //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -60,19 +65,26 @@ pub fn main() {
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
-    input_manager.wait_for_key();
-    let mut control_info = input_manager::ControlInfo::default();
+    //input_manager.wait_for_key();
+    //let mut control_info = input_manager::ControlInfo::default();
 
     'main_loop: loop {
-        input_manager.read_control(&mut control_info);
+        //input_manager.read_control(&mut control_info);
 
-        if input_manager.should_exit() {
-            break 'main_loop;
-        }
+        //if input_manager.should_exit() {
+        //    break 'main_loop;
+        //}
+        let ray_hits = match ray_caster.tick() {
+            Ok(hits) => { hits },
+            Err(message) => {
+                println!("{}",message);
+                break 'main_loop;
+            }
+        };
 
         // fake walls
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, width, view_height)
+            .create_texture_streaming(PixelFormatEnum::RGB24, pix_width, pix_height)
             .unwrap();
 
         // TODO reduce duplication
@@ -81,43 +93,48 @@ pub fn main() {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
+                let vm = view_height / 6;
 
-                for x in 0..width {
-                    for y in 0..view_height / 2 {
-                        put_pixel(buffer, pitch, x, y, ceiling);
+                for x in 0..pix_width {
+                    for y in 0..pix_height / 2 {
+                        let (r, g, b) = ceiling;
+                        let rs = (((vm - y) * r as u32) / vm) as u8;
+                        let gs = (((vm - y) * g as u32) / vm) as u8;
+                        let bs = (((vm - y) * b as u32) / vm) as u8;
+                        let ceilings = (rs, gs, bs);
+
+                        put_pixel(buffer, pitch, x, y, ceilings);
                     }
-                    for y in view_height / 2..view_height {
-                        put_pixel(buffer, pitch, x, y, floor);
-                    }
-                }
-
-                let mut current = (view_height / 8) * 3;
-                let split = 6;
-
-                let color = color_map[150];
-                for x in 0..width / split {
-                    if x % 4 == 0 {
-                        current -= 1
-                    }
-
-                    for y in view_center - current..view_center + current {
-                        put_pixel(buffer, pitch, x, y, color);
+                    for y in pix_height / 2..pix_height {
+                        let (r, g, b) = floor;
+                        let rs = (((y -vm) * r as u32) / vm) as u8;
+                        let gs = (((y -vm) * g as u32) / vm) as u8;
+                        let bs = (((y -vm) * b as u32) / vm) as u8;
+                        let floors = (rs, gs, bs);
+                        put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
 
-                let color = color_map[155];
-                for x in width / split..(width - width / split) {
-                    for y in view_center - current..view_center + current {
-                        put_pixel(buffer, pitch, x, y, color);
-                    }
-                }
+                for x in 0..pix_width {
+                    let mut color = if ray_hits[x as usize].horizontal {
+                        color_map[150]
+                    } else {
+                        color_map[155]
+                    };
+                    let current = match ray_hits[x as usize].height {
+                        rh if rh > pix_center => { pix_center },
+                        rh => { rh }
+                    };
 
-                let color = color_map[150];
-                for x in width - width / split..width {
-                    if x % 4 == 0 {
-                        current += 1
-                    }
-                    for y in view_center - current..view_center + current {
+                    // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                    let (r,g, b) =  color;
+
+                    let rs = ((current * r as u32 * 2) / vm) as u8;
+                    let gs = ((current * g as u32 * 2) / vm) as u8;
+                    let bs = ((current * b as u32 * 2) / vm) as u8;
+                    color = (rs, gs, bs);
+
+                    for y in pix_center - current..pix_center + current {
                         put_pixel(buffer, pitch, x, y, color);
                     }
                 }

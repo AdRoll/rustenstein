@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 sdl2 = "0.35.1"
+num = "0.4.0"
