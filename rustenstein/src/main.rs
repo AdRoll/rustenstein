@@ -4,7 +4,7 @@ use cache::Picture;
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::render::{Texture, TextureCreator};
+use sdl2::render::{Texture, RenderTarget};
 use sdl2::video::WindowContext;
 
 mod cache;
@@ -12,6 +12,7 @@ mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
 mod input_manager;
 mod map_parser;
+mod ray_caster;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
 const VGA_CEILING_COLORS: [usize; 60] = [
@@ -32,8 +33,8 @@ pub fn main() {
 
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
-    let mut input_manager = input_manager::InputManager::startup(&sdl_context);
-
+    //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 150.0, 400.0, 0.3);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -56,14 +57,21 @@ pub fn main() {
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
-    input_manager.wait_for_key();
-    let mut control_info = input_manager::ControlInfo::default();
+    //input_manager.wait_for_key();
+    //let mut control_info = input_manager::ControlInfo::default();
 
     'main_loop: loop {
-        input_manager.read_control(&mut control_info);
+        //input_manager.read_control(&mut control_info);
 
-        if input_manager.should_exit() {
-            break 'main_loop;
+        //if input_manager.should_exit() {
+        //    break 'main_loop;
+        //}
+        match ray_caster.tick() {
+            Ok(_) => {},
+            Err(message) => {
+                println!("{}",message);
+                break 'main_loop;
+            }
         }
 
         // fake walls

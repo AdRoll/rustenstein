@@ -1,9 +1,10 @@
 extern crate sdl2;
 
+use sdl2::{Sdl, EventPump};
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::render::Canvas;
+use sdl2::render::{Canvas, WindowCanvas};
 use sdl2::render::RenderTarget;
 use sdl2::rect::Rect;
 use sdl2::rect::Point;
@@ -11,13 +12,11 @@ use std::time::Duration;
 use std::f64::consts::PI;
 use num::pow;
 
-mod map_data;
+use crate::map_data::Tile;
+use crate::map_data::tile_at;
 
-use map_data::Tile;
-use map_data::tile_at;
-
-const WIDTH_2D:u32 =  1536;
-const HEIGHT_2D:u32 = 1536;
+const WIDTH_2D:u32 =  1024;
+const HEIGHT_2D:u32 = 1024;
 const MAP_H:u32 = 64;
 const MAP_W:u32 = 64;
 const MAP_SCALE_H:u32 = HEIGHT_2D / MAP_H;
@@ -41,83 +40,101 @@ struct Player {
 
 struct Nothing;
 
-fn main() {
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let window_2d = video_subsystem.window("", WIDTH_2D, HEIGHT_2D)
-        .position_centered()
-        .build()
-        .unwrap();
-    let mut canvas_2d = window_2d.into_canvas().build().unwrap();
-    canvas_2d.set_draw_color(Color::RGB(0, 255, 255));
-    canvas_2d.clear();
-    canvas_2d.present();
+pub struct RayCaster {
+    canvas: WindowCanvas,
+    event_pump: EventPump,
+    player: Player,
+    left_down: bool,
+    right_down: bool,
+    up_down: bool,
+    down_down: bool
+}
 
-    let mut event_pump = sdl_context.event_pump().unwrap();
-    let mut player = Player { x: WIDTH_2D as f64 / 3.0,
-                              y: HEIGHT_2D as f64 / 3.0,
-                              angle: 0.0 };
-    let mut left_down = false;
-    let mut right_down = false;
-    let mut up_down = false;
-    let mut down_down = false;
-    'main: loop {
-        canvas_2d.set_draw_color(Color::RGB(64, 64, 64));
+impl RayCaster {
+    pub fn init(sdl_context: &Sdl, player_x:f64, player_y:f64, player_angle:f64) -> RayCaster {
+        let video_subsystem = sdl_context.video().unwrap();
+        let window_2d = video_subsystem.window("", WIDTH_2D, HEIGHT_2D)
+            .position_centered()
+            .build()
+            .unwrap();
+        let mut canvas_2d = window_2d.into_canvas().build().unwrap();
+        canvas_2d.set_draw_color(Color::RGB(0, 255, 255));
         canvas_2d.clear();
-        for event in event_pump.poll_iter() {
+        canvas_2d.present();
+        let mut pump = sdl_context.event_pump().unwrap();
+        RayCaster {
+            canvas: canvas_2d,
+            event_pump: pump,
+            player: Player {
+                x: player_x,
+                y: player_y,
+                angle: player_angle
+            },
+            left_down: false,
+            right_down: false,
+            up_down: false,
+            down_down: false
+        }
+    }
+
+    pub fn tick(&mut self) -> Result<u32, &str> {
+        self.canvas.set_draw_color(Color::RGB(64, 64, 64));
+        self.canvas.clear();
+        //TODO: move this code to a sensible location
+        for event in self.event_pump.poll_iter() {
             match event {
                 Event::Quit {..} |
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'main
+                    return Err("Goodbye!")
                 },
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                    left_down = true
+                    self.left_down = true
                 },
                 Event::KeyUp { keycode: Some(Keycode::Left), .. } => {
-                    left_down = false;
+                    self.left_down = false;
                 },
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                    right_down = true
+                    self.right_down = true
                 },
                 Event::KeyUp { keycode: Some(Keycode::Right), .. } => {
-                    right_down = false;
+                    self.right_down = false;
                 },
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    up_down = true
+                    self.up_down = true
                 },
                 Event::KeyUp { keycode: Some(Keycode::Up), .. } => {
-                    up_down = false;
+                    self.up_down = false;
                 },
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    down_down = true
+                    self.down_down = true
                 },
                 Event::KeyUp { keycode: Some(Keycode::Down), .. } => {
-                    down_down = false;
+                    self.down_down = false;
                 },
                 _ => {}
             }
         }
-        if left_down {
-            player.angle += ROTATE_SPEED;
+        if self.left_down {
+            self.player.angle += ROTATE_SPEED;
         }
-        if right_down {
-            player.angle -= ROTATE_SPEED;
+        if self.right_down {
+            self.player.angle -= ROTATE_SPEED;
         }
-        player.angle = norm_angle(player.angle);
-        if up_down {
-            player.x += player.angle.sin() * MOVE_SPEED;
-            player.y += player.angle.cos() * MOVE_SPEED;
+        self.player.angle = norm_angle(self.player.angle);
+        if self.up_down {
+            self.player.x += self.player.angle.sin() * MOVE_SPEED;
+            self.player.y += self.player.angle.cos() * MOVE_SPEED;
         }
-        if down_down {
-            player.x -= player.angle.sin() * MOVE_SPEED;
-            player.y -= player.angle.cos() * MOVE_SPEED;
+        if self.down_down {
+            self.player.x -= self.player.angle.sin() * MOVE_SPEED;
+            self.player.y -= self.player.angle.cos() * MOVE_SPEED;
         }
-        // The rest of the game loop goes here...
-        draw_map(&mut canvas_2d);
-        draw_rays(&mut canvas_2d, &mut player);
-        draw_player(&mut canvas_2d, &mut player);
-        canvas_2d.present();
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        draw_map(&mut self.canvas);
+        draw_rays(&mut self.canvas, &mut self.player);
+        draw_player(&mut self.canvas, &mut self.player);
+        self.canvas.present();
+        Ok(1)
+        //::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
