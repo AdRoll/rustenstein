@@ -14,6 +14,8 @@ mod input_manager;
 mod map_parser;
 mod ray_caster;
 
+use crate::ray_caster::RayHit;
+
 const VGA_FLOOR_COLOR: usize = 0x19;
 const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0x1d, 0xbf, 0x4e, 0x4e, 0x4e, 0x1d, 0x8d, 0x4e,
@@ -68,13 +70,13 @@ pub fn main() {
         //if input_manager.should_exit() {
         //    break 'main_loop;
         //}
-        match ray_caster.tick() {
-            Ok(_) => {},
+        let ray_hits = match ray_caster.tick() {
+            Ok(hits) => { hits },
             Err(message) => {
                 println!("{}",message);
                 break 'main_loop;
             }
-        }
+        };
 
         // fake walls
         let mut texture = texture_creator
@@ -97,36 +99,20 @@ pub fn main() {
                     }
                 }
 
-                // let mut current = (view_height / 8) * 3;
-                // let split = 6;
-
-                // let color = color_map[150];
-                // for x in 0..width / split {
-                //     if x % 4 == 0 {
-                //         current -= 1
-                //     }
-
-                //     for y in view_center - current..view_center + current {
-                //         put_pixel(buffer, pitch, x, y, color);
-                //     }
-                // }
-
-                // let color = color_map[155];
-                // for x in width / split..(width - width / split) {
-                //     for y in view_center - current..view_center + current {
-                //         put_pixel(buffer, pitch, x, y, color);
-                //     }
-                // }
-
-                // let color = color_map[150];
-                // for x in width - width / split..width {
-                //     if x % 4 == 0 {
-                //         current += 1
-                //     }
-                //     for y in view_center - current..view_center + current {
-                //         put_pixel(buffer, pitch, x, y, color);
-                //     }
-                // }
+                for x in 0..pix_width {
+                    let color = if ray_hits[x as usize].horizontal {
+                        color_map[150]
+                    } else {
+                        color_map[155]
+                    };
+                    let current = match ray_hits[x as usize].height {
+                        rh if rh > pix_center => { 0 },
+                        rh => { rh }
+                    };
+                    for y in pix_center - current..pix_center + current {
+                        put_pixel(buffer, pitch, x, y, color);
+                    }
+                }
             })
             .unwrap();
 

@@ -8,7 +8,7 @@ use sdl2::render::{Canvas, WindowCanvas};
 use sdl2::render::RenderTarget;
 use sdl2::rect::Rect;
 use sdl2::rect::Point;
-use std::cmp::max;
+use std::cmp::min;
 use std::time::Duration;
 use std::f64::consts::PI;
 use num::pow;
@@ -31,7 +31,7 @@ const ANGLE_DOWN:f64 = 0.0;
 const ANGLE_UP:f64 = PI;
 const ANGLE_LEFT:f64 = 3.0*PI/2.0;
 const ANGLE_RIGHT:f64 = PI/2.0;
-const TILE_SIZE:u32 = 64;
+const TILE_SIZE:u32 = 4;
 
 struct Player {
     x: f64,
@@ -54,9 +54,9 @@ pub struct RayCaster {
 }
 
 pub struct RayHit {
-    height: u32,
-    tile: Tile,
-    horizontal: bool
+    pub height: u32,
+    pub tile: Tile,
+    pub horizontal: bool
 }
 
 impl RayCaster {
@@ -150,8 +150,8 @@ impl RayCaster {
                          self.view3d_height, self.view3d_width);
         draw_player(&mut self.canvas, &mut self.player);
         self.canvas.present();
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
         Ok(hits)
-        //::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
@@ -205,7 +205,7 @@ fn draw_rays<T: RenderTarget>(canvas: &mut Canvas<T>,
         draw_ray(canvas, player, hit, Color::WHITE);
         let (_,_,distance,tile) = hit;
         let ray_height = (TILE_SIZE * n_rays) as f64 / distance;
-        hits.push(RayHit{ height: max(height, ray_height as u32),
+        hits.push(RayHit{ height: min(height, ray_height as u32),
                           tile: tile,
                           horizontal: horiz });
     }
