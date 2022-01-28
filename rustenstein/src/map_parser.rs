@@ -133,7 +133,7 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
                         .try_into()
                         .unwrap(),
                 );
-                let segment_start = output.len() - usize::from(distance) * 2;
+                let segment_start = (usize::from(distance) + 1) * 2;
                 let segment_end = segment_start + usize::from(*count) * 2;
                 let segment_to_repeat = output[segment_start..segment_end].to_vec();
                 output.extend_from_slice(&segment_to_repeat);
@@ -230,8 +230,12 @@ impl fmt::Display for Map {
             .for_each(|(word_i, word)| {
                 let x = word_i % usize::from(self.width_n_tiles);
                 // let y = word_i / usize::from(self.height_n_tiles);
-                if word < 107 {
-                    write!(f, "\u{25A0}").unwrap();
+                if word == 90 {
+                    write!(f, "|").unwrap();
+                } else if word == 91 {
+                    write!(f, "-").unwrap();
+                } else if word < 107 {
+                    write!(f, "W").unwrap();
                 } else {
                     write!(f, " ").unwrap();
                 }
