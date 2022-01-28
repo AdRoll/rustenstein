@@ -3,6 +3,7 @@
 extern crate sdl2;
 
 use cache::Picture;
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
@@ -41,7 +42,6 @@ pub fn main() {
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -65,6 +65,11 @@ pub fn main() {
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
+
+    wait_for_key(&mut sdl_context.event_pump().unwrap());
+
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
+
     //input_manager.wait_for_key();
     //let mut control_info = input_manager::ControlInfo::default();
 
@@ -155,7 +160,6 @@ pub fn main() {
             .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
             .unwrap();
         draw_to_texture(&mut texture, &statuspic, color_map);
-
         // I don't know why I had to *5 for the height
         canvas
             .copy(
@@ -273,6 +277,17 @@ fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
             }
         }
         i += 1;
+    }
+}
+
+pub fn wait_for_key(event_pump: &mut EventPump) {
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                _ => {}
+            }
+        }
     }
 }
 
