@@ -89,18 +89,30 @@ pub fn main() {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
+                let vm = view_height / 6;
 
                 for x in 0..pix_width {
                     for y in 0..pix_height / 2 {
-                        put_pixel(buffer, pitch, x, y, ceiling);
+                        let (r, g, b) = ceiling;
+                        let rs = (((vm - y) * r as u32) / vm) as u8;
+                        let gs = (((vm - y) * g as u32) / vm) as u8;
+                        let bs = (((vm - y) * b as u32) / vm) as u8;
+                        let ceilings = (rs, gs, bs);
+
+                        put_pixel(buffer, pitch, x, y, ceilings);
                     }
                     for y in pix_height / 2..pix_height {
-                        put_pixel(buffer, pitch, x, y, floor);
+                        let (r, g, b) = floor;
+                        let rs = (((y -vm) * r as u32) / vm) as u8;
+                        let gs = (((y -vm) * g as u32) / vm) as u8;
+                        let bs = (((y -vm) * b as u32) / vm) as u8;
+                        let floors = (rs, gs, bs);
+                        put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
 
                 for x in 0..pix_width {
-                    let color = if ray_hits[x as usize].horizontal {
+                    let mut color = if ray_hits[x as usize].horizontal {
                         color_map[150]
                     } else {
                         color_map[155]
@@ -109,6 +121,15 @@ pub fn main() {
                         rh if rh > pix_center => { pix_center },
                         rh => { rh }
                     };
+
+                    // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                    let (r,g, b) =  color;
+
+                    let rs = ((current * r as u32 * 2) / vm) as u8;
+                    let gs = ((current * g as u32 * 2) / vm) as u8;
+                    let bs = ((current * b as u32 * 2) / vm) as u8;
+                    color = (rs, gs, bs);
+
                     for y in pix_center - current..pix_center + current {
                         put_pixel(buffer, pitch, x, y, color);
                     }
