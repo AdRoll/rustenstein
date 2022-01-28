@@ -152,22 +152,36 @@ pub const STARTPICS: usize = 3;
 const DATADIR: &str = "shareware";
 
 pub struct Cache {
-    huff: Vec<(u16, u16)>,
-    headers: Vec<u32>,
     pics: Vec<Picture>,
+    textures: Vec<Vec<u8>>,
+    sprites: Vec<(CompShape,Vec<u8>)>,
+    sounds: Vec<Vec<u8>>,
 }
 
 impl Cache {
-    pub fn new(huff: Vec<(u16, u16)>, headers: Vec<u32>, pics: Vec<Picture>) -> Cache {
+    pub fn new(pics: Vec<Picture>, textures: Vec<Vec<u8>>, sprites: Vec<(CompShape,Vec<u8>)>, sounds: Vec<Vec<u8>>) -> Cache {
         Cache {
-            huff: huff,
-            headers: headers,
             pics: pics,
+            textures: textures,
+            sprites: sprites,
+            sounds: sounds,
         }
     }
 
     pub fn get_pic(&self, index: usize) -> &Picture {
         &self.pics[index - 3]
+    }
+
+    pub fn get_texture(&self, index: usize) -> &Vec<u8> {
+        &self.textures[index]
+    }
+
+    pub fn get_sprite(&self, index: usize) -> &(CompShape,Vec<u8>) {
+        &self.sprites[index]
+    }
+
+    pub fn get_sound(&self, index: usize) -> &Vec<u8> {
+        &self.sounds[index]
     }
 }
 
@@ -175,6 +189,13 @@ pub struct Picture {
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct CompShape {
+    pub left_pix: u16,
+    pub right_pix: u16,
+    pub dataofs: Vec<u16>,
 }
 
 pub fn startup() -> Cache {
@@ -248,10 +269,44 @@ fn setup_graphics() -> Cache {
         page_lengths.push(length);
     }
 
-    // TODO: Esteban
-    // We need to read the rest of the file from here, and add it to the Cache state and build a function to retrieve them
+    let mut textures: Vec<Vec<u8>> = Vec::new();
+    let mut sprites: Vec<(CompShape,Vec<u8>)> = Vec::new();
+    let mut sounds: Vec<Vec<u8>> = Vec::new();
 
-    Cache::new(huff, headers, pics)
+    for i in 0..chunks_in_file - 1 { // last value fails as it seems length is wrong
+        if page_offsets[i] == 0 {
+            // sparse page
+            continue;
+        }
+
+        let mut value_end = page_offsets[i + 1] as usize;
+        if page_offsets[i + 1] == 0 {
+            value_end = page_offsets[i] as usize + page_lengths[i] as usize;
+        }
+
+        let value = &vswap_file[page_offsets[i] as usize..value_end];
+        if i < pm_sprite_start {
+            textures.push(value.to_vec());
+        } else if i < pm_sound_start {
+            // for sprites we parse the CompShape struct as well
+            if value.len() > 0 {
+                sprites.push((CompShape {
+                        left_pix: u16::from_le_bytes([value[0], value[1]]),
+                        right_pix: u16::from_le_bytes([value[2], value[3]]),
+                        dataofs: value[4..132]
+                                    .chunks_exact(2)
+                                    .into_iter()
+                                    .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                                    .collect()
+                    },
+                    value.to_vec()));
+            }
+        } else {
+            sounds.push(value.to_vec());
+        }
+    }
+
+    Cache::new(pics, textures, sprites, sounds)
 }
 
 fn huff_expand(huff: &Vec<(u16, u16)>, source: &[u8], length: usize) -> Vec<u8> {
