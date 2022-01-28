@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::{fmt, fs};
 
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
@@ -15,7 +15,7 @@ struct MapHead {
     title: Vec<u8>, // so far empty in map files we've seen, no idea what to do with this for now... could probably be a string
 }
 
-fn parse_map_head(path: PathBuf, keep_n_first: Option<usize>) -> MapHead {
+fn parse_map_head<P: AsRef<Path>>(path: P, keep_n_first: Option<usize>) -> MapHead {
     let raw_data = fs::read(path).expect("could not read MAPHEAD file");
 
     MapHead {
@@ -169,7 +169,7 @@ pub struct Map {
     name: String,
 }
 
-fn parse_map_data(path: PathBuf, meta: MapHead) -> Vec<Map> {
+fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
     let raw_data = fs::read(path).expect("could not read GAMEMAPS file");
     let mut maps = Vec::new();
 
@@ -206,7 +206,7 @@ fn parse_map_data(path: PathBuf, meta: MapHead) -> Vec<Map> {
 }
 
 /// Made with MAPHEAD.WL1 and GAMEMAPS.WL1 in mind
-pub fn load_maps(maphead: PathBuf, gamemaps: PathBuf, keep_n_first: Option<usize>) -> Vec<Map> {
+pub fn load_maps<P: AsRef<Path>>(maphead: P, gamemaps: P, keep_n_first: Option<usize>) -> Vec<Map> {
     let metadata = parse_map_head(maphead, keep_n_first);
     parse_map_data(gamemaps, metadata)
 }
@@ -318,22 +318,14 @@ mod tests {
     #[test]
     #[ignore]
     fn dump_map0_plane0_bin() {
-        let maps = load_maps(
-            "shareware/MAPHEAD.WL1".into(),
-            "shareware/GAMEMAPS.WL1".into(),
-            Some(1),
-        );
+        let maps = load_maps("shareware/MAPHEAD.WL1", "shareware/GAMEMAPS.WL1", Some(1));
         fs::write("test_map0_plane0.bin", maps[0].plane0.as_ref().unwrap()).unwrap();
     }
 
     #[test]
     #[ignore]
     fn dump_map0_plane0_printout() {
-        let maps = load_maps(
-            "shareware/MAPHEAD.WL1".into(),
-            "shareware/GAMEMAPS.WL1".into(),
-            Some(1),
-        );
+        let maps = load_maps("shareware/MAPHEAD.WL1", "shareware/GAMEMAPS.WL1", Some(1));
         let mut file = fs::File::create("test_map0.txt").unwrap();
         write!(file, "{}", maps[0]).unwrap();
     }
