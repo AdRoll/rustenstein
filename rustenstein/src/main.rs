@@ -48,7 +48,8 @@ pub fn main() {
     let color_map = build_color_map();
     let titlepic = pics_cache.get_pic(cache::TITLEPIC);
     let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
-    let weapon_data = std::fs::read("pistolsprite.bin").unwrap();
+    // FIXME not really the weapon
+    let (weapon_shape, weapon_data) = pics_cache.get_sprite(100);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -77,7 +78,6 @@ pub fn main() {
         let ray_hits = match ray_caster.tick() {
             Ok(hits) => { hits },
             Err(message) => {
-                println!("{}",message);
                 break 'main_loop;
             }
         };
@@ -141,7 +141,7 @@ pub fn main() {
 
                 println!("{} {} {}", width, view_height, pitch);
                 simple_scale_shape(pix_width, pix_height, color_map, buffer, pitch,
-                                   25, 39, &[214, 222, 230, 238, 246, 254, 262, 270, 278, 286, 294, 302, 310, 318, 326, 51657, 51657, 51659, 51401, 51400, 52168, 50632, 51400, 51660, 7880, 7710, 7710, 51230, 49858, 51394, 51916, 6168, 6168, 7964, 7967, 49871, 49858, 51912, 7196, 5656, 5397, 6166, 6682, 52992, 49858, 51400, 6171, 7192, 6430, 5398, 7708, 30, 49879, 51394, 200, 1817, 6151, 6174, 5398, 7708, 30, 50647, 51397, 7112],
+                                   weapon_shape.left_pix, weapon_shape.right_pix, &weapon_shape.dataofs,
                                    &weapon_data);
             })
             .unwrap();
@@ -177,8 +177,8 @@ pub fn main() {
 
 fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
                       vbuf: &mut [u8], pitch:usize,
-                      left_pix: u8, right_pix: u8,
-                      dataofs: &[i32], shape_bytes: &[u8]) {
+                      left_pix: u16, right_pix: u16,
+                      dataofs: &[u16], shape_bytes: &[u8]) {
     let sprite_scale_factor = 2;
     let xcenter = view_width / 2;
     let height = view_height + 1;
