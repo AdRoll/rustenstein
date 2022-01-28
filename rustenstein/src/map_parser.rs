@@ -1,14 +1,6 @@
 use std::path::PathBuf;
 use std::{fmt, fs};
 
-// TODO: fix loading... currently the 4th map gets index out of bounds error in the
-// RLEW function
-
-// TODO: the maps produced via the dump functions (run with cargo test -- --ignored)
-// make more visual sense now but the size does not (440k bin for map 1 where it should
-// probably be around 64k after seeing some map mods online) the size could provide a clue
-// into what must be fixed so all maps get parsed properly
-
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
 // some map format info: https://moddingwiki.shikadi.net/wiki/GameMaps_Format
 // on the RLEW compression algorithm: https://moddingwiki.shikadi.net/wiki/Id_Software_RLEW_compression
