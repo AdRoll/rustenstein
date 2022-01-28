@@ -8,6 +8,7 @@ use sdl2::render::{Canvas, WindowCanvas};
 use sdl2::render::RenderTarget;
 use sdl2::rect::Rect;
 use sdl2::rect::Point;
+use std::cmp::max;
 use std::time::Duration;
 use std::f64::consts::PI;
 use num::pow;
@@ -26,11 +27,11 @@ const PLAYER_LEN:f64 = 40.0;
 const ROTATE_SPEED:f64 = 0.02;
 const MOVE_SPEED:f64 = 2.5;
 const FIELD_OF_VIEW:f64 = PI/2.0;
-const N_RAYS:u32 = 320;
 const ANGLE_DOWN:f64 = 0.0;
 const ANGLE_UP:f64 = PI;
 const ANGLE_LEFT:f64 = 3.0*PI/2.0;
 const ANGLE_RIGHT:f64 = PI/2.0;
+const TILE_SIZE:u32 = 64;
 
 struct Player {
     x: f64,
@@ -44,14 +45,27 @@ pub struct RayCaster {
     canvas: WindowCanvas,
     event_pump: EventPump,
     player: Player,
+    view3d_width: u32,
+    view3d_height: u32,
     left_down: bool,
     right_down: bool,
     up_down: bool,
-    down_down: bool
+    down_down: bool,
+}
+
+pub struct RayHit {
+    height: u32,
+    tile: Tile,
+    horizontal: bool
 }
 
 impl RayCaster {
-    pub fn init(sdl_context: &Sdl, player_x:f64, player_y:f64, player_angle:f64) -> RayCaster {
+    pub fn init(sdl_context: &Sdl,
+                player_x:f64,
+                player_y:f64,
+                player_angle:f64,
+                view3d_width:u32,
+                view3d_height:u32) -> RayCaster {
         let video_subsystem = sdl_context.video().unwrap();
         let window_2d = video_subsystem.window("", WIDTH_2D, HEIGHT_2D)
             .position_centered()
@@ -65,6 +79,8 @@ impl RayCaster {
         RayCaster {
             canvas: canvas_2d,
             event_pump: pump,
+            view3d_width: view3d_width,
+            view3d_height: view3d_height,
             player: Player {
                 x: player_x,
                 y: player_y,
@@ -73,11 +89,11 @@ impl RayCaster {
             left_down: false,
             right_down: false,
             up_down: false,
-            down_down: false
+            down_down: false,
         }
     }
 
-    pub fn tick(&mut self) -> Result<u32, &str> {
+    pub fn tick(&mut self) -> Result<Vec<RayHit>, &str> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
         //TODO: move this code to a sensible location
@@ -130,10 +146,11 @@ impl RayCaster {
             self.player.y -= self.player.angle.cos() * MOVE_SPEED;
         }
         draw_map(&mut self.canvas);
-        draw_rays(&mut self.canvas, &mut self.player);
+        let hits = draw_rays(&mut self.canvas, &mut self.player,
+                         self.view3d_height, self.view3d_width);
         draw_player(&mut self.canvas, &mut self.player);
         self.canvas.present();
-        Ok(1)
+        Ok(hits)
         //::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
@@ -171,23 +188,33 @@ fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &mut Player) {
 }
 
 
-fn draw_rays<T: RenderTarget>(canvas: &mut Canvas<T>, player: &mut Player) {
-    let step_angle = FIELD_OF_VIEW / (N_RAYS as f64);
-    for i in 0..N_RAYS {
+fn draw_rays<T: RenderTarget>(canvas: &mut Canvas<T>,
+                              player: &mut Player,
+                              height: u32,
+                              n_rays: u32) -> Vec<RayHit> {
+    let step_angle = FIELD_OF_VIEW / (n_rays as f64);
+    let mut hits : Vec<RayHit> = Vec::new();
+    for i in 0..n_rays {
         let offset = (i as f64)*step_angle - FIELD_OF_VIEW / 2.0;
         let ray_h = cast_ray_h(canvas, player, offset);
         let ray_v = cast_ray_v(canvas, player, offset);
-        let hit = match (ray_h, ray_v) {
-            ((_,_,d1,_), (_,_,d2,_)) if d1 <= d2 => { ray_h },
-            _ => { ray_v }
+        let (hit,horiz) = match (ray_h, ray_v) {
+            ((_,_,d1,_), (_,_,d2,_)) if d1 <= d2 => { (ray_h,false) },
+            _ => { (ray_v,true) }
         };
         draw_ray(canvas, player, hit, Color::WHITE);
+        let (_,_,distance,tile) = hit;
+        let ray_height = (TILE_SIZE * n_rays) as f64 / distance;
+        hits.push(RayHit{ height: max(height, ray_height as u32),
+                          tile: tile,
+                          horizontal: horiz });
     }
+    hits
 }
 
 fn draw_ray<T: RenderTarget>(canvas: &mut Canvas<T>,
                              player: &mut Player,
-                             ray: (f64,f64,f64,u32),
+                             ray: (f64,f64,f64,Tile),
                              color: Color) {
     let (x,y,_,_) = ray;
     canvas.set_draw_color(color);
@@ -202,12 +229,12 @@ fn draw_ray<T: RenderTarget>(canvas: &mut Canvas<T>,
 //canvas parameter left here to facilitate debug drawings
 fn cast_ray_v<T: RenderTarget>(_canvas: &mut Canvas<T>,
                                player: &mut Player,
-                               ray_offset: f64) -> (f64, f64, f64, u32) {
+                               ray_offset: f64) -> (f64, f64, f64, Tile) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
     if ray_angle == ANGLE_LEFT || ray_angle == ANGLE_RIGHT {
-        return (0.0,0.0,f64::INFINITY,0);
+        return (0.0,0.0,f64::INFINITY,Tile::Floor);
     }
 
     let (mut rx,mut ry,xo,yo) =
@@ -231,12 +258,12 @@ fn cast_ray_v<T: RenderTarget>(_canvas: &mut Canvas<T>,
 
 fn cast_ray_h<T: RenderTarget>(_canvas: &mut Canvas<T>,
                                player: &mut Player,
-                               ray_offset: f64) -> (f64, f64, f64, u32) {
+                               ray_offset: f64) -> (f64, f64, f64, Tile) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
     if ray_angle == ANGLE_UP || ray_angle == ANGLE_DOWN {
-        return (0.0,0.0,f64::INFINITY,0);
+        return (0.0,0.0,f64::INFINITY,Tile::Floor);
     }
 
     let (mut rx,mut ry,xo,yo) =
@@ -257,15 +284,15 @@ fn cast_ray_h<T: RenderTarget>(_canvas: &mut Canvas<T>,
     return follow_ray(player,rx,ry,xo,yo);
 }
 
-fn follow_ray(player: &mut Player, x:f64, y:f64, xo:f64, yo:f64) -> (f64, f64, f64, u32) {
+fn follow_ray(player: &mut Player, x:f64, y:f64, xo:f64, yo:f64) -> (f64, f64, f64, Tile) {
     let (mut rx, mut ry) = (x,y);
     for _ in 1..MAP_H {
         match read_map(rx, ry) {
-            Ok(Tile::Wall(_)) => {
-                return (rx, ry, distance(player, rx,ry), 1);
+            Ok(tile@Tile::Wall(_)) => {
+                return (rx, ry, distance(player, rx,ry), tile);
             },
             Err(_) => {
-                return (rx, ry, distance(player, rx,ry), 0);
+                return (rx, ry, distance(player, rx,ry), Tile::Floor);
             },
             _ => {}
         }
@@ -273,7 +300,7 @@ fn follow_ray(player: &mut Player, x:f64, y:f64, xo:f64, yo:f64) -> (f64, f64, f
         ry += yo;
     }
 
-    return (rx, ry, distance(player,rx,ry), 0);
+    return (rx, ry, distance(player,rx,ry), Tile::Floor);
 }
 
 fn read_map(x:f64, y:f64) -> Result<Tile, Nothing> {

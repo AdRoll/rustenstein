@@ -26,15 +26,17 @@ const STATUS_LINES: u32 = 40;
 
 pub fn main() {
     let pics_cache = init();
-    let (width, height) = (960, 600);
-    let scale_factor = width / 320;
+    let (width, height, pix_width) = (960, 600, 320);
+    let scale_factor = width / pix_width;
     let view_height = height - STATUS_LINES * scale_factor;
     let view_center = view_height / 2;
+    let pix_height = view_height / scale_factor;
+    let pix_center = view_height / scale_factor / 2;
 
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 150.0, 400.0, 0.3);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 150.0, 400.0, 0.3, pix_width, pix_height);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -76,7 +78,7 @@ pub fn main() {
 
         // fake walls
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, width, view_height)
+            .create_texture_streaming(PixelFormatEnum::RGB24, pix_width, pix_height)
             .unwrap();
 
         // TODO reduce duplication
@@ -86,45 +88,45 @@ pub fn main() {
                 let floor = color_map[VGA_FLOOR_COLOR];
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
 
-                for x in 0..width {
-                    for y in 0..view_height / 2 {
+                for x in 0..pix_width {
+                    for y in 0..pix_height / 2 {
                         put_pixel(buffer, pitch, x, y, ceiling);
                     }
-                    for y in view_height / 2..view_height {
+                    for y in pix_height / 2..pix_height {
                         put_pixel(buffer, pitch, x, y, floor);
                     }
                 }
 
-                let mut current = (view_height / 8) * 3;
-                let split = 6;
+                // let mut current = (view_height / 8) * 3;
+                // let split = 6;
 
-                let color = color_map[150];
-                for x in 0..width / split {
-                    if x % 4 == 0 {
-                        current -= 1
-                    }
+                // let color = color_map[150];
+                // for x in 0..width / split {
+                //     if x % 4 == 0 {
+                //         current -= 1
+                //     }
 
-                    for y in view_center - current..view_center + current {
-                        put_pixel(buffer, pitch, x, y, color);
-                    }
-                }
+                //     for y in view_center - current..view_center + current {
+                //         put_pixel(buffer, pitch, x, y, color);
+                //     }
+                // }
 
-                let color = color_map[155];
-                for x in width / split..(width - width / split) {
-                    for y in view_center - current..view_center + current {
-                        put_pixel(buffer, pitch, x, y, color);
-                    }
-                }
+                // let color = color_map[155];
+                // for x in width / split..(width - width / split) {
+                //     for y in view_center - current..view_center + current {
+                //         put_pixel(buffer, pitch, x, y, color);
+                //     }
+                // }
 
-                let color = color_map[150];
-                for x in width - width / split..width {
-                    if x % 4 == 0 {
-                        current += 1
-                    }
-                    for y in view_center - current..view_center + current {
-                        put_pixel(buffer, pitch, x, y, color);
-                    }
-                }
+                // let color = color_map[150];
+                // for x in width - width / split..width {
+                //     if x % 4 == 0 {
+                //         current += 1
+                //     }
+                //     for y in view_center - current..view_center + current {
+                //         put_pixel(buffer, pitch, x, y, color);
+                //     }
+                // }
             })
             .unwrap();
 

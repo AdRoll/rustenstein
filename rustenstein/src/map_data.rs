@@ -649,6 +649,7 @@ pub const E1_M1_ACTORS: [[u8; 64]; 64] = [
     ],
 ];
 
+#[derive(Copy, Clone)]
 pub enum Tile {
     Floor,
     Wall(u8),
