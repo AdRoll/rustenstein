@@ -1,12 +1,16 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 extern crate sdl2;
 
 use cache::Picture;
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, RenderTarget};
 use sdl2::video::WindowContext;
 use std::time::Instant;
+use core::slice::Iter;
 
 mod cache;
 mod map_data;
@@ -28,6 +32,7 @@ const VGA_CEILING_COLORS: [usize; 60] = [
 const TEXTURE_WIDTH: u32 = 320;
 const TEXTURE_HEIGHT: u32 = 200;
 const STATUS_LINES: u32 = 40;
+const DARKNESS: f64 = 0.75;
 
 pub fn main() {
     let start_time = Instant::now();
@@ -42,7 +47,6 @@ pub fn main() {
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -52,6 +56,8 @@ pub fn main() {
     let default_facepic = pics_cache.get_pic(cache::FACE1APIC);
     let lefteye_facepic = pics_cache.get_pic(cache::FACE1BPIC);
     let righteye_facepic = pics_cache.get_pic(cache::FACE1CPIC);
+    // FIXME not really the weapon
+    let (weapon_shape, weapon_data) = pics_cache.get_sprite(209);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -68,6 +74,11 @@ pub fn main() {
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
+
+    wait_for_key(&mut sdl_context.event_pump().unwrap());
+
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
+
     //input_manager.wait_for_key();
     //let mut control_info = input_manager::ControlInfo::default();
 
@@ -80,7 +91,6 @@ pub fn main() {
         let ray_hits = match ray_caster.tick() {
             Ok(hits) => { hits },
             Err(message) => {
-                println!("{}",message);
                 break 'main_loop;
             }
         };
@@ -96,18 +106,21 @@ pub fn main() {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
+                let vm = view_height / 6;
 
                 for x in 0..pix_width {
                     for y in 0..pix_height / 2 {
-                        put_pixel(buffer, pitch, x, y, ceiling);
+                        let ceilings = darken_color(ceiling, vm - y, pix_center);
+                        put_pixel(buffer, pitch, x, y, ceilings);
                     }
                     for y in pix_height / 2..pix_height {
-                        put_pixel(buffer, pitch, x, y, floor);
+                        let floors = darken_color(floor, y - vm, pix_center);
+                        put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
 
                 for x in 0..pix_width {
-                    let color = if ray_hits[x as usize].horizontal {
+                    let mut color = if ray_hits[x as usize].horizontal {
                         color_map[150]
                     } else {
                         color_map[155]
@@ -116,10 +129,18 @@ pub fn main() {
                         rh if rh > pix_center => { pix_center },
                         rh => { rh }
                     };
+
+                    // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                    color = darken_color(color, current, pix_center);
+
                     for y in pix_center - current..pix_center + current {
                         put_pixel(buffer, pitch, x, y, color);
                     }
                 }
+
+                simple_scale_shape(pix_width, pix_height, color_map, buffer, pitch,
+                                   weapon_shape.left_pix, weapon_shape.right_pix, &weapon_shape.dataofs,
+                                   &weapon_data);
             })
             .unwrap();
 
@@ -155,7 +176,130 @@ pub fn main() {
                 ),
             )
             .unwrap();
+
         canvas.present();
+        // break 'main_loop;
+    }
+}
+
+fn darken_color(color: (u8,u8,u8), lightness: u32, max: u32) -> (u8,u8,u8) {
+    let (r,g, b) =  color;
+    let factor = lightness as f64 / max as f64 / DARKNESS;
+    let rs = (r as f64 * factor) as u8;
+    let gs = (g as f64 * factor) as u8;
+    let bs = (b as f64 * factor) as u8;
+    (rs, gs, bs)
+}
+
+fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
+                      vbuf: &mut [u8], pitch:usize,
+                      left_pix: u16, right_pix: u16,
+                      dataofs: &[u16], shape_bytes: &[u8]) {
+    let sprite_scale_factor = 2;
+    let xcenter = view_width / 2;
+    let height = view_height + 1;
+
+    let scale = height >> 1;
+    let pixheight = scale * sprite_scale_factor;
+    let actx = xcenter - scale;
+    let upperedge = view_height / 2 - scale;
+    // cmdptr=(word *) shape->dataofs;
+    // cmdptr = iter(shape.dataofs)
+    let mut cmdptr = dataofs.iter();
+
+    let mut i = left_pix;
+    let mut pixcnt = i as u32 * pixheight;
+    let mut rpix = (pixcnt >> 6) + actx;
+
+    while i <= right_pix {
+        let mut lpix = rpix;
+        if lpix >= view_width {
+            break;
+        }
+
+        pixcnt += pixheight;
+        rpix = (pixcnt >> 6) + actx;
+
+        if lpix != rpix && rpix > 0 {
+
+            if lpix < 0 {
+                lpix = 0;
+            }
+            if rpix > view_width {
+                rpix = view_width;
+                i = right_pix + 1;
+            }
+            let read_word = |line: &mut Iter<u8> | u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)]);
+            let read_word_signed = |line: &mut Iter<u8>| i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)]);
+
+            let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
+            while lpix < rpix {
+                let mut line = cline.iter();
+                let mut endy = read_word(&mut line);
+                while endy > 0 {
+                    endy >>= 1;
+                    let newstart = read_word_signed(&mut line);
+                    let starty = read_word(&mut line) >> 1;
+                    let mut j = starty;
+                    let mut ycnt = j as u32 * pixheight;
+                    let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+
+                    let mut vmem_index: usize =
+                    if screndy < 0 {
+                        lpix as usize * 3
+                    } else {
+                        screndy as usize * pitch + lpix as usize * 3
+                    };
+
+                    while j < endy {
+                        let mut scrstarty = screndy;
+                        ycnt += pixheight;
+                        screndy = (ycnt >> 6) as i32+ upperedge as i32;
+                        if scrstarty != screndy && screndy > 0 {
+                            let index = newstart + j as i16;
+                            let col =
+                            if index >= 0 {
+                                shape_bytes[index as usize]
+                            } else {
+                                0
+                            };
+                            if scrstarty < 0 {
+                                scrstarty = 0;
+                            }
+                            if screndy > view_height as i32{
+                                screndy = view_height as i32;
+                                j = endy;
+                            }
+
+                            while scrstarty < screndy {
+                                // FIXME can put pixel be used here instead?
+                                let (r, g, b) = color_map[col as usize];
+                                vbuf[vmem_index as usize] = r;
+                                vbuf[vmem_index as usize + 1] = g;
+                                vbuf[vmem_index as usize + 2] = b;
+                                vmem_index += pitch;
+                                scrstarty += 1;
+                            }
+                        }
+                        j += 1;
+                    }
+                    endy = read_word(&mut line);
+                }
+                lpix += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
+pub fn wait_for_key(event_pump: &mut EventPump) {
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                _ => {}
+            }
+        }
     }
 }
 
