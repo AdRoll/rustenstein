@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 extern crate sdl2;
 
 use cache::Picture;
@@ -6,6 +8,7 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
+use core::slice::Iter;
 
 mod cache;
 mod map_data;
@@ -40,6 +43,7 @@ pub fn main() {
     let color_map = build_color_map();
     let titlepic = pics_cache.get_pic(cache::TITLEPIC);
     let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
+    let weapon_data = std::fs::read("pistolsprite.bin").unwrap();
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -117,6 +121,10 @@ pub fn main() {
                         put_pixel(buffer, pitch, x, y, color);
                     }
                 }
+
+                simple_scale_shape(width, view_height, color_map, buffer, pitch,
+                                   25, 39, &[214, 222, 230, 238, 246, 254, 262, 270, 278, 286, 294, 302, 310, 318, 326, 51657, 51657, 51659, 51401, 51400, 52168, 50632, 51400, 51660, 7880, 7710, 7710, 51230, 49858, 51394, 51916, 6168, 6168, 7964, 7967, 49871, 49858, 51912, 7196, 5656, 5397, 6166, 6682, 52992, 49858, 51400, 6171, 7192, 6430, 5398, 7708, 30, 49879, 51394, 200, 1817, 6151, 6174, 5398, 7708, 30, 50647, 51397, 7112],
+                                   &weapon_data);
             })
             .unwrap();
 
@@ -129,6 +137,7 @@ pub fn main() {
             .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
             .unwrap();
         draw_to_texture(&mut texture, &statuspic, color_map);
+
         // I don't know why I had to *5 for the height
         canvas
             .copy(
@@ -142,7 +151,110 @@ pub fn main() {
                 ),
             )
             .unwrap();
+
         canvas.present();
+        // break 'main_loop;
+    }
+}
+
+fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
+                      vbuf: &mut [u8], pitch:usize,
+                      left_pix: u8, right_pix: u8,
+                      dataofs: &[i32], shape_bytes: &[u8]) {
+    let sprite_scale_factor = 2;
+    let xcenter = view_width / 2;
+    let height = view_height + 1;
+
+    let scale = height >> 1;
+    let pixheight = scale * sprite_scale_factor;
+    let actx = xcenter - scale;
+    let upperedge = view_height / 2 - scale;
+    // cmdptr=(word *) shape->dataofs;
+    // cmdptr = iter(shape.dataofs)
+    let mut cmdptr = dataofs.iter();
+
+    let mut i = left_pix;
+    let mut pixcnt = i as u32 * pixheight;
+    let mut rpix = (pixcnt >> 6) + actx;
+
+    while i <= right_pix {
+        let mut lpix = rpix;
+        if lpix >= view_width {
+            break;
+        }
+
+        pixcnt += pixheight;
+        rpix = (pixcnt >> 6) + actx;
+
+        if lpix != rpix && rpix > 0 {
+
+            if lpix < 0 {
+                lpix = 0;
+            }
+            if rpix > view_width {
+                rpix = view_width;
+                i = right_pix + 1;
+            }
+            let read_word = |line: &mut Iter<u8> | u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)]);
+            let read_word_signed = |line: &mut Iter<u8>| i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)]);
+
+            let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
+            while lpix < rpix {
+                let mut line = cline.iter();
+                let mut endy = read_word(&mut line);
+                while endy > 0 {
+                    endy >>= 1;
+                    let newstart = read_word_signed(&mut line);
+                    let starty = read_word(&mut line) >> 1;
+                    let mut j = starty;
+                    let mut ycnt = j as u32 * pixheight;
+                    let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+
+                    let mut vmem_index: usize =
+                    if screndy < 0 {
+                        lpix as usize * 3
+                    } else {
+                        screndy as usize * pitch + lpix as usize * 3
+                    };
+
+                    while j < endy {
+                        let mut scrstarty = screndy;
+                        ycnt += pixheight;
+                        screndy = (ycnt >> 6) as i32+ upperedge as i32;
+                        if scrstarty != screndy && screndy > 0 {
+                            let index = newstart + j as i16;
+                            let col =
+                            if index >= 0 {
+                                shape_bytes[index as usize]
+                            } else {
+                                0
+                            };
+                            if scrstarty < 0 {
+                                scrstarty = 0;
+                            }
+                            if screndy > view_height as i32{
+                                screndy = view_height as i32;
+                                j = endy;
+                            }
+
+                            while scrstarty < screndy {
+                                // FIXME can put pixel be used here instead?
+                                let (r, g, b) = color_map[col as usize];
+                                vbuf[vmem_index as usize] = r;
+                                vbuf[vmem_index as usize + 1] = g;
+                                vbuf[vmem_index as usize + 2] = b;
+                                vmem_index += pitch;
+                                scrstarty += 1;
+                            }
+                        }
+                        j += 1;
+                    }
+                    endy = read_word(&mut line);
+                }
+                lpix += 1;
+            }
+        }
+        i += 1;
     }
 }
 
