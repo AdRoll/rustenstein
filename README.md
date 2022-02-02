@@ -1,6 +1,6 @@
 # Rustenstein 3D
 
-Wolfenstein 3D port written in rust. This is still a prototype.
+Wolfenstein 3D port written in rust. This is still a prototype. Details about the development can be read [here](https://tech.nextroll.com/blog/dev/2022/02/02/rustenstein.html).
 
 ## Setup
 
