@@ -149,7 +149,7 @@ pub const NUMCHUNKS: u32 = 161;
 pub const NUMPICS: usize = 144;
 pub const STARTPICS: usize = 3;
 
-const DATADIR: &str = "shareware";
+const DATADIR: &str = "data";
 
 pub struct Cache {
     pics: Vec<Picture>,
