@@ -154,12 +154,17 @@ const DATADIR: &str = "data";
 pub struct Cache {
     pics: Vec<Picture>,
     textures: Vec<Vec<u8>>,
-    sprites: Vec<(CompShape,Vec<u8>)>,
+    sprites: Vec<(CompShape, Vec<u8>)>,
     sounds: Vec<Vec<u8>>,
 }
 
 impl Cache {
-    pub fn new(pics: Vec<Picture>, textures: Vec<Vec<u8>>, sprites: Vec<(CompShape,Vec<u8>)>, sounds: Vec<Vec<u8>>) -> Cache {
+    pub fn new(
+        pics: Vec<Picture>,
+        textures: Vec<Vec<u8>>,
+        sprites: Vec<(CompShape, Vec<u8>)>,
+        sounds: Vec<Vec<u8>>,
+    ) -> Cache {
         Cache {
             pics: pics,
             textures: textures,
@@ -176,7 +181,7 @@ impl Cache {
         &self.textures[index]
     }
 
-    pub fn get_sprite(&self, index: usize) -> &(CompShape,Vec<u8>) {
+    pub fn get_sprite(&self, index: usize) -> &(CompShape, Vec<u8>) {
         &self.sprites[index]
     }
 
@@ -246,8 +251,8 @@ fn setup_graphics() -> Cache {
         })
     }
 
-    let vswap_file = fs::read(DATADIR.to_owned() + "/VSWAP.WL1")
-        .expect("Something went wrong reading the file");
+    let vswap_file =
+        fs::read(DATADIR.to_owned() + "/VSWAP.WL1").expect("Something went wrong reading the file");
 
     let chunks_in_file = u16::from_le_bytes([vswap_file[0], vswap_file[1]]) as usize;
     let pm_sprite_start = u16::from_le_bytes([vswap_file[2], vswap_file[3]]) as usize;
@@ -270,10 +275,11 @@ fn setup_graphics() -> Cache {
     }
 
     let mut textures: Vec<Vec<u8>> = Vec::new();
-    let mut sprites: Vec<(CompShape,Vec<u8>)> = Vec::new();
+    let mut sprites: Vec<(CompShape, Vec<u8>)> = Vec::new();
     let mut sounds: Vec<Vec<u8>> = Vec::new();
 
-    for i in 0..chunks_in_file - 1 { // last value fails as it seems length is wrong
+    for i in 0..chunks_in_file - 1 {
+        // last value fails as it seems length is wrong
         if page_offsets[i] == 0 {
             // sparse page
             continue;
@@ -290,16 +296,18 @@ fn setup_graphics() -> Cache {
         } else if i < pm_sound_start {
             // for sprites we parse the CompShape struct as well
             if value.len() > 0 {
-                sprites.push((CompShape {
+                sprites.push((
+                    CompShape {
                         left_pix: u16::from_le_bytes([value[0], value[1]]),
                         right_pix: u16::from_le_bytes([value[2], value[3]]),
                         dataofs: value[4..132]
-                                    .chunks_exact(2)
-                                    .into_iter()
-                                    .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                                    .collect()
+                            .chunks_exact(2)
+                            .into_iter()
+                            .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                            .collect(),
                     },
-                    value.to_vec()));
+                    value.to_vec(),
+                ));
             }
         } else {
             sounds.push(value.to_vec());

@@ -3,14 +3,14 @@
 extern crate sdl2;
 
 use cache::Picture;
-use sdl2::EventPump;
+use core::slice::Iter;
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::render::{Texture, RenderTarget};
+use sdl2::render::{RenderTarget, Texture};
 use sdl2::video::WindowContext;
+use sdl2::EventPump;
 use std::time::Instant;
-use core::slice::Iter;
 
 mod cache;
 mod map_data;
@@ -58,7 +58,8 @@ pub fn main() {
     let righteye_facepic = pics_cache.get_pic(cache::FACE1CPIC);
     // FIXME not really the weapon
     let (weapon_shape, weapon_data) = pics_cache.get_sprite(209);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
+    let mut ray_caster =
+        ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -89,7 +90,7 @@ pub fn main() {
         //    break 'main_loop;
         //}
         let ray_hits = match ray_caster.tick() {
-            Ok(hits) => { hits },
+            Ok(hits) => hits,
             Err(message) => {
                 break 'main_loop;
             }
@@ -126,8 +127,8 @@ pub fn main() {
                         color_map[155]
                     };
                     let current = match ray_hits[x as usize].height {
-                        rh if rh > pix_center => { pix_center },
-                        rh => { rh }
+                        rh if rh > pix_center => pix_center,
+                        rh => rh,
                     };
 
                     // divide the color by a factor of the height to get a gradient shadow effect based on distance
@@ -138,9 +139,17 @@ pub fn main() {
                     }
                 }
 
-                simple_scale_shape(pix_width, pix_height, color_map, buffer, pitch,
-                                   weapon_shape.left_pix, weapon_shape.right_pix, &weapon_shape.dataofs,
-                                   &weapon_data);
+                simple_scale_shape(
+                    pix_width,
+                    pix_height,
+                    color_map,
+                    buffer,
+                    pitch,
+                    weapon_shape.left_pix,
+                    weapon_shape.right_pix,
+                    &weapon_shape.dataofs,
+                    &weapon_data,
+                );
             })
             .unwrap();
 
@@ -154,7 +163,7 @@ pub fn main() {
             .unwrap();
 
         draw_to_texture(&mut texture, &statuspic, color_map);
-        
+
         let face_to_draw = match start_time.elapsed().as_secs() % 3 {
             0 => default_facepic,
             1 => lefteye_facepic,
@@ -182,8 +191,8 @@ pub fn main() {
     }
 }
 
-fn darken_color(color: (u8,u8,u8), lightness: u32, max: u32) -> (u8,u8,u8) {
-    let (r,g, b) =  color;
+fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
+    let (r, g, b) = color;
     let factor = lightness as f64 / max as f64 / DARKNESS;
     let rs = (r as f64 * factor) as u8;
     let gs = (g as f64 * factor) as u8;
@@ -191,10 +200,17 @@ fn darken_color(color: (u8,u8,u8), lightness: u32, max: u32) -> (u8,u8,u8) {
     (rs, gs, bs)
 }
 
-fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
-                      vbuf: &mut [u8], pitch:usize,
-                      left_pix: u16, right_pix: u16,
-                      dataofs: &[u16], shape_bytes: &[u8]) {
+fn simple_scale_shape(
+    view_width: u32,
+    view_height: u32,
+    color_map: ColorMap,
+    vbuf: &mut [u8],
+    pitch: usize,
+    left_pix: u16,
+    right_pix: u16,
+    dataofs: &[u16],
+    shape_bytes: &[u8],
+) {
     let sprite_scale_factor = 2;
     let xcenter = view_width / 2;
     let height = view_height + 1;
@@ -221,7 +237,6 @@ fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
         rpix = (pixcnt >> 6) + actx;
 
         if lpix != rpix && rpix > 0 {
-
             if lpix < 0 {
                 lpix = 0;
             }
@@ -229,8 +244,12 @@ fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
                 rpix = view_width;
                 i = right_pix + 1;
             }
-            let read_word = |line: &mut Iter<u8> | u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)]);
-            let read_word_signed = |line: &mut Iter<u8>| i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)]);
+            let read_word = |line: &mut Iter<u8>| {
+                u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+            };
+            let read_word_signed = |line: &mut Iter<u8>| {
+                i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+            };
 
             let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
             while lpix < rpix {
@@ -244,8 +263,7 @@ fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
                     let mut ycnt = j as u32 * pixheight;
                     let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
 
-                    let mut vmem_index: usize =
-                    if screndy < 0 {
+                    let mut vmem_index: usize = if screndy < 0 {
                         lpix as usize * 3
                     } else {
                         screndy as usize * pitch + lpix as usize * 3
@@ -254,11 +272,10 @@ fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
                     while j < endy {
                         let mut scrstarty = screndy;
                         ycnt += pixheight;
-                        screndy = (ycnt >> 6) as i32+ upperedge as i32;
+                        screndy = (ycnt >> 6) as i32 + upperedge as i32;
                         if scrstarty != screndy && screndy > 0 {
                             let index = newstart + j as i16;
-                            let col =
-                            if index >= 0 {
+                            let col = if index >= 0 {
                                 shape_bytes[index as usize]
                             } else {
                                 0
@@ -266,7 +283,7 @@ fn simple_scale_shape(view_width: u32, view_height: u32, color_map: ColorMap,
                             if scrstarty < 0 {
                                 scrstarty = 0;
                             }
-                            if screndy > view_height as i32{
+                            if screndy > view_height as i32 {
                                 screndy = view_height as i32;
                                 j = endy;
                             }
@@ -308,7 +325,6 @@ fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
 
 fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-
         let shift_x = TEXTURE_WIDTH / 2 - pic.width;
         let shift_y = pic.height / 8;
         // different from the window size
@@ -317,7 +333,13 @@ fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMa
                 let source_index =
                     (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
                 let color = pic.data[source_index as usize];
-                put_pixel(buffer, pitch, x + shift_x, y + shift_y, color_map[color as usize]);
+                put_pixel(
+                    buffer,
+                    pitch,
+                    x + shift_x,
+                    y + shift_y,
+                    color_map[color as usize],
+                );
             }
         }
     });

@@ -69,7 +69,7 @@ impl<'a> InputManager<'a> {
     pub fn should_exit(&self) -> bool {
         self.should_exit
     }
-    
+
     pub fn wait_for_key(&self) {
         'running: loop {
             for event in self.sdl_context.event_pump().unwrap().poll_iter() {
