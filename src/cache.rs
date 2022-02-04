@@ -1,6 +1,6 @@
-use std::fs;
-use crate::map::Map;
 use crate::map;
+use crate::map::Map;
+use std::fs;
 use std::path::Path;
 
 pub const H_BJPIC: usize = 3;
@@ -170,14 +170,14 @@ impl Cache {
         textures: Vec<Vec<u8>>,
         sprites: Vec<(CompShape, Vec<u8>)>,
         sounds: Vec<Vec<u8>>,
-        maps: Vec<Map>
+        maps: Vec<Map>,
     ) -> Cache {
         Cache {
             pics,
             textures,
             sprites,
             sounds,
-            maps
+            maps,
         }
     }
 
@@ -568,7 +568,7 @@ fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
                 header.length_plane1,
                 &meta.magic,
             ),
-            header.name
+            header.name,
         ));
     }
     maps

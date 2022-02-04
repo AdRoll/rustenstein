@@ -33,11 +33,15 @@ pub struct Map {
 }
 
 impl Map {
-    pub fn new(plane0: [[u16; HEIGHT]; WIDTH],
-               plane1: [[u16; HEIGHT]; WIDTH],
-               name: String) -> Self {
+    pub fn new(
+        plane0: [[u16; HEIGHT]; WIDTH],
+        plane1: [[u16; HEIGHT]; WIDTH],
+        name: String,
+    ) -> Self {
         Self {
-            plane0, plane1, name
+            plane0,
+            plane1,
+            name,
         }
     }
 
