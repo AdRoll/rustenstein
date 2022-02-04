@@ -159,12 +159,34 @@ fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -
     let bytes = rlew_decompress(&decarmackized[4..], magic_rlew_word);
     let mut bytes = bytes.chunks_exact(2).map(|word| u16::from_le_bytes(word.try_into().unwrap()));
     let mut result = [[0; HEIGHT]; WIDTH];
-    for x in result.iter_mut().take(WIDTH){
-        for xy in x.iter_mut().take(HEIGHT) {
-            *xy = bytes.next().unwrap();
+    for y in 0..HEIGHT {
+        for x in result.iter_mut().take(WIDTH) {
+            x[y] = bytes.next().unwrap();
         }
     }
     result
+}
+
+#[derive(Copy, Clone)]
+pub enum Tile {
+    Floor,
+    Wall(u16),
+    Door { vertical: bool, lock: u16 },
+}
+
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
+
+pub enum Actor {
+    Player(Direction),
+    Enemy, // TODO differentiate enemy types
+    Item,  // TODO differentiate item types
+    DeadGuard,
+    PushWall,
 }
 
 #[derive(Debug)]
@@ -172,6 +194,39 @@ pub struct Map {
     plane0: [[u16; 64]; 64],
     plane1: [[u16; 64]; 64],
     name: String,
+}
+
+impl Map {
+    pub fn tile_at(&self, x: u8, y: u8) -> Tile {
+        let tile = self.plane0[x as usize][y as usize];
+        match tile {
+            90 | 92 | 94 | 96 | 98 | 100 => Tile::Door {
+                vertical: true,
+                lock: (tile - 90) / 2,
+            },
+            91 | 93 | 95 | 97 | 99 | 101 => Tile::Door {
+                vertical: false,
+                lock: (tile - 91) / 2,
+            },
+            106 => Tile::Floor, // this one is actually an ambush tile, review if we need to do something with it
+            n if n < 107 => Tile::Wall(tile), // keep the tile number to find the proper texture
+            _ => Tile::Floor,
+        }
+    }
+
+    pub fn actor_at(&self, x: u8, y: u8) -> Option<Actor> {
+        match self.plane1[x as usize][y as usize] {
+            19 => Some(Actor::Player(Direction::North)),
+            20 => Some(Actor::Player(Direction::East)),
+            21 => Some(Actor::Player(Direction::South)),
+            22 => Some(Actor::Player(Direction::West)),
+            n if (23..=72).contains(&n) => Some(Actor::Item),
+            98 => Some(Actor::PushWall),
+            124 => Some(Actor::DeadGuard),
+            n if n >= 108 => Some(Actor::Enemy),
+            _ => None,
+        }
+    }
 }
 
 fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
@@ -210,6 +265,7 @@ fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
     maps
 }
 
+// FIXME improve this loading interface
 /// Made with MAPHEAD.WL1 and GAMEMAPS.WL1 in mind
 pub fn load_maps<P: AsRef<Path>>(maphead: P, gamemaps: P, keep_n_first: Option<usize>) -> Vec<Map> {
     let metadata = parse_map_head(maphead, keep_n_first);

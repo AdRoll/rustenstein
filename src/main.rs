@@ -13,7 +13,6 @@ use sdl2::EventPump;
 use std::time::Instant;
 
 mod cache;
-mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
 mod input_manager;
 mod map;
@@ -43,9 +42,8 @@ pub fn main() {
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
     let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
-    println!("MAP1 \n{}", maps[0]);
-
     let level = 0;
+    let map = &maps[level];
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
     let video_subsystem = sdl_context.video().unwrap();
@@ -78,8 +76,8 @@ pub fn main() {
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
 
-    ray_caster.tick().unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
-    ray_caster.wait_for_key();
+    ray_caster.tick(map).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
+    ray_caster.wait_for_key(map);
 
     //input_manager.wait_for_key();
     //let mut control_info = input_manager::ControlInfo::default();
@@ -90,7 +88,7 @@ pub fn main() {
         //if input_manager.should_exit() {
         //    break 'main_loop;
         //}
-        let ray_hits = match ray_caster.tick() {
+        let ray_hits = match ray_caster.tick(map) {
             Ok(hits) => hits,
             Err(_) => {
                 break 'main_loop;

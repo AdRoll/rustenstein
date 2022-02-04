@@ -13,8 +13,7 @@ use std::cmp::min;
 use std::f64::consts::PI;
 use std::time::Duration;
 
-use crate::map_data::tile_at;
-use crate::map_data::Tile;
+use crate::map::{Tile, Map};
 
 const WIDTH_2D: u32 = 1024;
 const HEIGHT_2D: u32 = 1024;
@@ -96,14 +95,14 @@ impl RayCaster {
         }
     }
 
-    pub fn wait_for_key(&mut self) {
+    pub fn wait_for_key(&mut self, map: &Map) {
         'running: loop {
             for event in self.event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                     _ => {
-                        draw_map(&mut self.canvas);
-                        let _hits = draw_rays(
+                        draw_map(map, &mut self.canvas);
+                        let _hits = draw_rays(map,
                             &mut self.canvas,
                             &mut self.player,
                             self.view3d_height,
@@ -117,7 +116,7 @@ impl RayCaster {
         }
     }
 
-    pub fn tick(&mut self) -> Result<Vec<RayHit>, &str> {
+    pub fn tick(&mut self, map: &Map) -> Result<Vec<RayHit>, &str> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
         //TODO: move this code to a sensible location
@@ -186,8 +185,9 @@ impl RayCaster {
             self.player.x -= self.player.angle.sin() * MOVE_SPEED;
             self.player.y -= self.player.angle.cos() * MOVE_SPEED;
         }
-        draw_map(&mut self.canvas);
+        draw_map(map, &mut self.canvas);
         let hits = draw_rays(
+            map,
             &mut self.canvas,
             &mut self.player,
             self.view3d_height,
@@ -200,11 +200,11 @@ impl RayCaster {
     }
 }
 
-fn draw_map<T: RenderTarget>(canvas: &mut Canvas<T>) {
+fn draw_map<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>) {
     for y in 0..(MAP_H) {
         for x in 0..(MAP_W) {
             //let i = (y * MAP_W + x) as usize;
-            let color = match tile_at(x as u8, y as u8) {
+            let color = match map.tile_at(x as u8, y as u8) {
                 Tile::Wall(_) => Color::RGB(64, 64, 255),
                 _ => Color::RGB(0, 0, 0),
             };
@@ -241,6 +241,7 @@ fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &mut Player) {
 }
 
 fn draw_rays<T: RenderTarget>(
+    map: &Map,
     canvas: &mut Canvas<T>,
     player: &mut Player,
     height: u32,
@@ -250,8 +251,8 @@ fn draw_rays<T: RenderTarget>(
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
         let offset = FIELD_OF_VIEW / 2.0 - (i as f64) * step_angle;
-        let ray_h = cast_ray_h(canvas, player, offset);
-        let ray_v = cast_ray_v(canvas, player, offset);
+        let ray_h = cast_ray_h(map, canvas, player, offset);
+        let ray_v = cast_ray_v(map, canvas, player, offset);
         let (hit, horiz) = match (ray_h, ray_v) {
             ((_, _, d1, _), (_, _, d2, _)) if d1 <= d2 => (ray_h, false),
             _ => (ray_v, true),
@@ -287,6 +288,7 @@ fn draw_ray<T: RenderTarget>(
 
 //canvas parameter left here to facilitate debug drawings
 fn cast_ray_v<T: RenderTarget>(
+    map: &Map,
     _canvas: &mut Canvas<T>,
     player: &mut Player,
     ray_offset: f64,
@@ -316,10 +318,11 @@ fn cast_ray_v<T: RenderTarget>(
             -1.0 * MAP_SCALE_H as f64,
         )
     };
-    follow_ray(player, rx, ry, xo, yo)
+    follow_ray(map, player, rx, ry, xo, yo)
 }
 
 fn cast_ray_h<T: RenderTarget>(
+    map: &Map,
     _canvas: &mut Canvas<T>,
     player: &mut Player,
     ray_offset: f64,
@@ -350,13 +353,13 @@ fn cast_ray_h<T: RenderTarget>(
             -1.0 * c,
         )
     };
-    follow_ray(player, rx, ry, xo, yo)
+    follow_ray(map, player, rx, ry, xo, yo)
 }
 
-fn follow_ray(player: &mut Player, x: f64, y: f64, xo: f64, yo: f64) -> (f64, f64, f64, Tile) {
+fn follow_ray(map: &Map, player: &mut Player, x: f64, y: f64, xo: f64, yo: f64) -> (f64, f64, f64, Tile) {
     let (mut rx, mut ry) = (x, y);
     for _ in 1..MAP_H {
-        match read_map(rx, ry) {
+        match read_map(map, rx, ry) {
             Ok(tile @ Tile::Wall(_)) => {
                 return (rx, ry, distance(player, rx, ry), tile);
             }
@@ -372,13 +375,13 @@ fn follow_ray(player: &mut Player, x: f64, y: f64, xo: f64, yo: f64) -> (f64, f6
     (rx, ry, distance(player, rx, ry), Tile::Floor)
 }
 
-fn read_map(x: f64, y: f64) -> Result<Tile, Nothing> {
+fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
     let mx = cdiv(x, MAP_SCALE_W, 0.0);
     let my = cdiv(y, MAP_SCALE_H, 0.0);
     if mx >= MAP_W as usize || my >= MAP_H as usize {
         Err(Nothing)
     } else {
-        Ok(tile_at(mx as u8, my as u8))
+        Ok(map.tile_at(mx as u8, my as u8))
     }
 }
 
