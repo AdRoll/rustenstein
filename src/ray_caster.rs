@@ -78,12 +78,12 @@ impl RayCaster {
         canvas_2d.set_draw_color(Color::RGB(0, 255, 255));
         canvas_2d.clear();
         canvas_2d.present();
-        let mut pump = sdl_context.event_pump().unwrap();
+        let pump = sdl_context.event_pump().unwrap();
         RayCaster {
             canvas: canvas_2d,
             event_pump: pump,
-            view3d_width: view3d_width,
-            view3d_height: view3d_height,
+            view3d_width,
+            view3d_height,
             player: Player {
                 x: player_x,
                 y: player_y,
@@ -103,7 +103,7 @@ impl RayCaster {
                     Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                     _ => {
                         draw_map(&mut self.canvas);
-                        let hits = draw_rays(
+                        let _hits = draw_rays(
                             &mut self.canvas,
                             &mut self.player,
                             self.view3d_height,
@@ -213,8 +213,8 @@ fn draw_map<T: RenderTarget>(canvas: &mut Canvas<T>) {
                 .fill_rect(Rect::new(
                     (MAP_SCALE_W * x + 1).try_into().unwrap(),
                     (MAP_SCALE_H * y + 1).try_into().unwrap(),
-                    (MAP_SCALE_W - 1).try_into().unwrap(),
-                    (MAP_SCALE_H - 1).try_into().unwrap(),
+                    MAP_SCALE_W - 1,
+                    MAP_SCALE_H - 1,
                 ))
                 .unwrap();
         }
@@ -262,7 +262,7 @@ fn draw_rays<T: RenderTarget>(
         let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
         hits.push(RayHit {
             height: min(height, ray_height as u32),
-            tile: tile,
+            tile,
             horizontal: horiz,
         });
     }
@@ -298,7 +298,7 @@ fn cast_ray_v<T: RenderTarget>(
         return (0.0, 0.0, f64::INFINITY, Tile::Floor);
     }
 
-    let (mut rx, mut ry, xo, yo) = if ray_angle > ANGLE_LEFT || ray_angle < ANGLE_RIGHT {
+    let (rx, ry, xo, yo) = if !(ANGLE_RIGHT..=ANGLE_LEFT).contains(&ray_angle) {
         let round_y = ctrunc(player.y, MAP_SCALE_H, 1.0);
         let a = round_y - player.y;
         let b = a * ray_angle.tan();
@@ -316,7 +316,7 @@ fn cast_ray_v<T: RenderTarget>(
             -1.0 * MAP_SCALE_H as f64,
         )
     };
-    return follow_ray(player, rx, ry, xo, yo);
+    follow_ray(player, rx, ry, xo, yo)
 }
 
 fn cast_ray_h<T: RenderTarget>(
@@ -331,7 +331,7 @@ fn cast_ray_h<T: RenderTarget>(
         return (0.0, 0.0, f64::INFINITY, Tile::Floor);
     }
 
-    let (mut rx, mut ry, xo, yo) = if ray_angle < ANGLE_UP {
+    let (rx, ry, xo, yo) = if ray_angle < ANGLE_UP {
         // looking right -- increasing x
         let round_x = ctrunc(player.x, MAP_SCALE_W, 1.0);
         let b = round_x - player.x;
@@ -350,7 +350,7 @@ fn cast_ray_h<T: RenderTarget>(
             -1.0 * c,
         )
     };
-    return follow_ray(player, rx, ry, xo, yo);
+    follow_ray(player, rx, ry, xo, yo)
 }
 
 fn follow_ray(player: &mut Player, x: f64, y: f64, xo: f64, yo: f64) -> (f64, f64, f64, Tile) {
@@ -369,7 +369,7 @@ fn follow_ray(player: &mut Player, x: f64, y: f64, xo: f64, yo: f64) -> (f64, f6
         ry += yo;
     }
 
-    return (rx, ry, distance(player, rx, ry), Tile::Floor);
+    (rx, ry, distance(player, rx, ry), Tile::Floor)
 }
 
 fn read_map(x: f64, y: f64) -> Result<Tile, Nothing> {

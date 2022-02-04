@@ -166,10 +166,10 @@ impl Cache {
         sounds: Vec<Vec<u8>>,
     ) -> Cache {
         Cache {
-            pics: pics,
-            textures: textures,
-            sprites: sprites,
-            sounds: sounds,
+            pics,
+            textures,
+            sprites,
+            sounds,
         }
     }
 
@@ -247,7 +247,7 @@ fn setup_graphics() -> Cache {
         pics.push(Picture {
             width: width as u32,
             height: height as u32,
-            data: data,
+            data,
         })
     }
 
@@ -295,7 +295,7 @@ fn setup_graphics() -> Cache {
             textures.push(value.to_vec());
         } else if i < pm_sound_start {
             // for sprites we parse the CompShape struct as well
-            if value.len() > 0 {
+            if !value.is_empty() {
                 sprites.push((
                     CompShape {
                         left_pix: u16::from_le_bytes([value[0], value[1]]),
@@ -317,7 +317,7 @@ fn setup_graphics() -> Cache {
     Cache::new(pics, textures, sprites, sounds)
 }
 
-fn huff_expand(huff: &Vec<(u16, u16)>, source: &[u8], length: usize) -> Vec<u8> {
+fn huff_expand(huff: &[(u16, u16)], source: &[u8], length: usize) -> Vec<u8> {
     let mut dest: Vec<u8> = Vec::new();
     let headptr = 254; // head node is always node 254
     let mut huffptr = headptr;
@@ -336,7 +336,7 @@ fn huff_expand(huff: &Vec<(u16, u16)>, source: &[u8], length: usize) -> Vec<u8> 
             i += 1;
             mask = 1;
         } else {
-            mask = mask << 1;
+            mask <<= 1;
         }
         if nodeval < 256 {
             dest.push(nodeval.try_into().unwrap());
@@ -351,15 +351,10 @@ fn huff_expand(huff: &Vec<(u16, u16)>, source: &[u8], length: usize) -> Vec<u8> 
     dest
 }
 
-fn load_graphic(
-    source: &[u8],
-    headers: &Vec<u32>,
-    huff: &Vec<(u16, u16)>,
-    chunk: usize,
-) -> Vec<u8> {
+fn load_graphic(source: &[u8], headers: &[u32], huff: &[(u16, u16)], chunk: usize) -> Vec<u8> {
     let pos = headers[chunk] as usize;
     let end = headers[chunk + 1] as usize;
 
     let length = u32::from_le_bytes(source[pos..pos + 4].try_into().unwrap());
-    huff_expand(&huff, &source[pos + 4..end], length.try_into().unwrap())
+    huff_expand(huff, &source[pos + 4..end], length.try_into().unwrap())
 }

@@ -40,7 +40,6 @@ pub fn main() {
     let (width, height, pix_width) = (960, 600, 320);
     let scale_factor = width / pix_width;
     let view_height = height - STATUS_LINES * scale_factor;
-    let view_center = view_height / 2;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
 
@@ -72,12 +71,12 @@ pub fn main() {
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
         .unwrap();
-    draw_to_texture(&mut texture, &titlepic, color_map);
+    draw_to_texture(&mut texture, titlepic, color_map);
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
 
-    ray_caster.tick();
+    ray_caster.tick().unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
     ray_caster.wait_for_key();
 
     //input_manager.wait_for_key();
@@ -91,7 +90,7 @@ pub fn main() {
         //}
         let ray_hits = match ray_caster.tick() {
             Ok(hits) => hits,
-            Err(message) => {
+            Err(_) => {
                 break 'main_loop;
             }
         };
@@ -148,7 +147,7 @@ pub fn main() {
                     weapon_shape.left_pix,
                     weapon_shape.right_pix,
                     &weapon_shape.dataofs,
-                    &weapon_data,
+                    weapon_data,
                 );
             })
             .unwrap();
@@ -162,7 +161,7 @@ pub fn main() {
             .create_texture_streaming(PixelFormatEnum::RGB24, TEXTURE_WIDTH, TEXTURE_HEIGHT)
             .unwrap();
 
-        draw_to_texture(&mut texture, &statuspic, color_map);
+        draw_to_texture(&mut texture, statuspic, color_map);
 
         let face_to_draw = match start_time.elapsed().as_secs() % 3 {
             0 => default_facepic,
@@ -170,7 +169,7 @@ pub fn main() {
             2 => righteye_facepic,
             _ => unreachable!(),
         };
-        draw_face_to_texture(&mut texture, &face_to_draw, color_map);
+        draw_face_to_texture(&mut texture, face_to_draw, color_map);
 
         // I don't know why I had to *5 for the height
         canvas
@@ -200,6 +199,9 @@ fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
     (rs, gs, bs)
 }
 
+// temporarily allowing too many arguments (default max is 7, we got 9)
+// this function should probably be refactored
+#[allow(clippy::too_many_arguments)]
 fn simple_scale_shape(
     view_width: u32,
     view_height: u32,
@@ -237,9 +239,6 @@ fn simple_scale_shape(
         rpix = (pixcnt >> 6) + actx;
 
         if lpix != rpix && rpix > 0 {
-            if lpix < 0 {
-                lpix = 0;
-            }
             if rpix > view_width {
                 rpix = view_width;
                 i = right_pix + 1;
@@ -310,39 +309,43 @@ fn simple_scale_shape(
 }
 
 fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
-    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        // different from the window size
-        for y in 0..pic.height {
-            for x in 0..pic.width {
-                let source_index =
-                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                let color = pic.data[source_index as usize];
-                put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            // different from the window size
+            for y in 0..pic.height {
+                for x in 0..pic.width {
+                    let source_index =
+                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                    let color = pic.data[source_index as usize];
+                    put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+                }
             }
-        }
-    });
+        })
+        .unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
 }
 
 fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
-    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        let shift_x = TEXTURE_WIDTH / 2 - pic.width;
-        let shift_y = pic.height / 8;
-        // different from the window size
-        for y in 0..pic.height {
-            for x in 0..pic.width {
-                let source_index =
-                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                let color = pic.data[source_index as usize];
-                put_pixel(
-                    buffer,
-                    pitch,
-                    x + shift_x,
-                    y + shift_y,
-                    color_map[color as usize],
-                );
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            let shift_x = TEXTURE_WIDTH / 2 - pic.width;
+            let shift_y = pic.height / 8;
+            // different from the window size
+            for y in 0..pic.height {
+                for x in 0..pic.width {
+                    let source_index =
+                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                    let color = pic.data[source_index as usize];
+                    put_pixel(
+                        buffer,
+                        pitch,
+                        x + shift_x,
+                        y + shift_y,
+                        color_map[color as usize],
+                    );
+                }
             }
-        }
-    });
+        })
+        .unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
 }
 
 fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8)) {
