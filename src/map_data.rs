@@ -694,7 +694,7 @@ pub fn actor_at(x: u8, y: u8) -> Option<Actor> {
         20 => Some(Actor::Player(Direction::East)),
         21 => Some(Actor::Player(Direction::South)),
         22 => Some(Actor::Player(Direction::West)),
-        n if n >= 23 && n <= 72 => Some(Actor::Item),
+        n if (23..=72).contains(&n) => Some(Actor::Item),
         98 => Some(Actor::PushWall),
         124 => Some(Actor::DeadGuard),
         n if n >= 108 => Some(Actor::Enemy),
