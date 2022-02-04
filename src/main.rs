@@ -57,8 +57,7 @@ pub fn main() {
     let righteye_facepic = pics_cache.get_pic(cache::FACE1CPIC);
     let (weapon_shape, weapon_data) = pics_cache.get_sprite(209);
 
-    let mut ray_caster =
-        ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)

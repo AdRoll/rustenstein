@@ -14,7 +14,7 @@ use std::f64::consts::PI;
 use std::time::Duration;
 
 use crate::map;
-use crate::map::{Tile, Map, Direction};
+use crate::map::{Direction, Map, Tile};
 
 const WIDTH_2D: u32 = 1024;
 const HEIGHT_2D: u32 = 1024;
@@ -60,12 +60,7 @@ pub struct RayHit {
 }
 
 impl RayCaster {
-    pub fn init(
-        sdl_context: &Sdl,
-        map: &Map,
-        view3d_width: u32,
-        view3d_height: u32,
-    ) -> RayCaster {
+    pub fn init(sdl_context: &Sdl, map: &Map, view3d_width: u32, view3d_height: u32) -> RayCaster {
         let video_subsystem = sdl_context.video().unwrap();
         let window_2d = video_subsystem
             .window("", WIDTH_2D, HEIGHT_2D)
@@ -114,7 +109,8 @@ impl RayCaster {
                     Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                     _ => {
                         draw_map(map, &mut self.canvas);
-                        let _hits = draw_rays(map,
+                        let _hits = draw_rays(
+                            map,
                             &mut self.canvas,
                             &mut self.player,
                             self.view3d_height,
@@ -368,7 +364,14 @@ fn cast_ray_h<T: RenderTarget>(
     follow_ray(map, player, rx, ry, xo, yo)
 }
 
-fn follow_ray(map: &Map, player: &mut Player, x: f64, y: f64, xo: f64, yo: f64) -> (f64, f64, f64, Tile) {
+fn follow_ray(
+    map: &Map,
+    player: &mut Player,
+    x: f64,
+    y: f64,
+    xo: f64,
+    yo: f64,
+) -> (f64, f64, f64, Tile) {
     let (mut rx, mut ry) = (x, y);
     for _ in 1..MAP_H {
         match read_map(map, rx, ry) {

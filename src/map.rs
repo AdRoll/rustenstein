@@ -157,7 +157,9 @@ fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -
     let plane_end = plane_start + length as usize;
     let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
     let bytes = rlew_decompress(&decarmackized[4..], magic_rlew_word);
-    let mut bytes = bytes.chunks_exact(2).map(|word| u16::from_le_bytes(word.try_into().unwrap()));
+    let mut bytes = bytes
+        .chunks_exact(2)
+        .map(|word| u16::from_le_bytes(word.try_into().unwrap()));
     let mut result = [[0; HEIGHT]; WIDTH];
     for y in 0..HEIGHT {
         for x in result.iter_mut().take(WIDTH) {
@@ -232,7 +234,7 @@ impl Map {
         for x in 0..WIDTH as u8 {
             for y in 0..HEIGHT as u8 {
                 if let Some(Actor::Player(direction)) = self.actor_at(x, y) {
-                    return (x, y, direction)
+                    return (x, y, direction);
                 }
             }
         }
