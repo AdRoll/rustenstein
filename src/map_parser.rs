@@ -311,6 +311,15 @@ mod tests {
         );
     }
 
+    // ignoring this one as it depends on the data files
+    #[test]
+    #[ignore]
+    fn map_file_parsing() {
+        let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(2));
+        assert_eq!("Wolf1 Map1", maps[0].name);
+        assert_eq!("Wolf1 Map2", maps[1].name);
+    }
+
     #[test]
     #[ignore]
     fn dump_map0_plane0_printout() {
