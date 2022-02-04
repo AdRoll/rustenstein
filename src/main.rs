@@ -35,27 +35,26 @@ const DARKNESS: f64 = 0.75;
 
 pub fn main() {
     let start_time = Instant::now();
-    let pics_cache = init();
+    let cache = cache::init();
     let (width, height, pix_width) = (960, 600, 320);
     let scale_factor = width / pix_width;
     let view_height = height - STATUS_LINES * scale_factor;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
-    let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1");
     let level = 1;
-    let map = &maps[level];
+    let map = cache.get_map(level);
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
 
     let color_map = build_color_map();
-    let titlepic = pics_cache.get_pic(cache::TITLEPIC);
-    let statuspic = pics_cache.get_pic(cache::STATUSBARPIC);
-    let default_facepic = pics_cache.get_pic(cache::FACE1APIC);
-    let lefteye_facepic = pics_cache.get_pic(cache::FACE1BPIC);
-    let righteye_facepic = pics_cache.get_pic(cache::FACE1CPIC);
-    let (weapon_shape, weapon_data) = pics_cache.get_sprite(209);
+    let titlepic = cache.get_pic(cache::TITLEPIC);
+    let statuspic = cache.get_pic(cache::STATUSBARPIC);
+    let default_facepic = cache.get_pic(cache::FACE1APIC);
+    let lefteye_facepic = cache.get_pic(cache::FACE1BPIC);
+    let righteye_facepic = cache.get_pic(cache::FACE1CPIC);
+    let (weapon_shape, weapon_data) = cache.get_sprite(209);
 
     let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
 
@@ -624,8 +623,4 @@ fn build_color_map() -> ColorMap {
             (b * 255 / 63) as u8,
         )
     })
-}
-
-fn init() -> cache::Cache {
-    cache::startup()
 }
