@@ -2,6 +2,8 @@
 
 Wolfenstein 3D port written in rust. This is still a prototype. Details about the development can be read [here](https://tech.nextroll.com/blog/dev/2022/02/02/rustenstein.html).
 
+A roadmap of work can be found [here](https://github.com/AdRoll/rustenstein/projects/1).
+
 ## Setup
 
 This requires the [SDL development library](https://github.com/Rust-SDL2/rust-sdl2#sdl20-development-libraries).
