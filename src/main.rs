@@ -41,8 +41,8 @@ pub fn main() {
     let view_height = height - STATUS_LINES * scale_factor;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
-    let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
-    let level = 0;
+    let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(2));
+    let level = 1;
     let map = &maps[level];
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
@@ -55,10 +55,10 @@ pub fn main() {
     let default_facepic = pics_cache.get_pic(cache::FACE1APIC);
     let lefteye_facepic = pics_cache.get_pic(cache::FACE1BPIC);
     let righteye_facepic = pics_cache.get_pic(cache::FACE1CPIC);
-    // FIXME not really the weapon
     let (weapon_shape, weapon_data) = pics_cache.get_sprite(209);
+
     let mut ray_caster =
-        ray_caster::RayCaster::init(&sdl_context, 470.0, 920.0, 1.54, pix_width, pix_height);
+        ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)

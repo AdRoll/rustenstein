@@ -13,12 +13,13 @@ use std::cmp::min;
 use std::f64::consts::PI;
 use std::time::Duration;
 
-use crate::map::{Tile, Map};
+use crate::map;
+use crate::map::{Tile, Map, Direction};
 
 const WIDTH_2D: u32 = 1024;
 const HEIGHT_2D: u32 = 1024;
-const MAP_H: u32 = 64;
-const MAP_W: u32 = 64;
+const MAP_H: u32 = map::HEIGHT as u32;
+const MAP_W: u32 = map::WIDTH as u32;
 const MAP_SCALE_H: u32 = HEIGHT_2D / MAP_H;
 const MAP_SCALE_W: u32 = WIDTH_2D / MAP_W;
 const PLAYER_DIAM: i32 = 6;
@@ -61,9 +62,7 @@ pub struct RayHit {
 impl RayCaster {
     pub fn init(
         sdl_context: &Sdl,
-        player_x: f64,
-        player_y: f64,
-        player_angle: f64,
+        map: &Map,
         view3d_width: u32,
         view3d_height: u32,
     ) -> RayCaster {
@@ -78,6 +77,19 @@ impl RayCaster {
         canvas_2d.clear();
         canvas_2d.present();
         let pump = sdl_context.event_pump().unwrap();
+
+        let (player_x, player_y, player_dir) = map.find_player_start();
+        // TODO not sure why thse /3 and /2 are necessary
+        // this may break at other resolutions
+        let player_x = (MAP_SCALE_W * (player_x as u32) + MAP_SCALE_W / 3) as f64;
+        let player_y = (MAP_SCALE_H * (player_y as u32) + MAP_SCALE_H / 2) as f64;
+        let player_angle = match player_dir {
+            Direction::North => ANGLE_UP,
+            Direction::East => ANGLE_RIGHT,
+            Direction::South => ANGLE_DOWN,
+            Direction::West => ANGLE_LEFT,
+        };
+
         RayCaster {
             canvas: canvas_2d,
             event_pump: pump,

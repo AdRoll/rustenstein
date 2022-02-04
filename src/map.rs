@@ -191,8 +191,8 @@ pub enum Actor {
 
 #[derive(Debug)]
 pub struct Map {
-    plane0: [[u16; 64]; 64],
-    plane1: [[u16; 64]; 64],
+    plane0: [[u16; HEIGHT]; WIDTH],
+    plane1: [[u16; HEIGHT]; WIDTH],
     name: String,
 }
 
@@ -226,6 +226,17 @@ impl Map {
             n if n >= 108 => Some(Actor::Enemy),
             _ => None,
         }
+    }
+
+    pub fn find_player_start(&self) -> (u8, u8, Direction) {
+        for x in 0..WIDTH as u8 {
+            for y in 0..HEIGHT as u8 {
+                if let Some(Actor::Player(direction)) = self.actor_at(x, y) {
+                    return (x, y, direction)
+                }
+            }
+        }
+        panic!("Can't find the player in the map");
     }
 }
 
