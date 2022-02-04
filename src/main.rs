@@ -76,7 +76,7 @@ pub fn main() {
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
 
-    let _ = ray_caster.tick(); // TODO: can we ignore any error or do we need to handle it?
+    ray_caster.tick().unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
     ray_caster.wait_for_key();
 
     //input_manager.wait_for_key();
@@ -309,39 +309,43 @@ fn simple_scale_shape(
 }
 
 fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
-    let _ = texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        // different from the window size
-        for y in 0..pic.height {
-            for x in 0..pic.width {
-                let source_index =
-                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                let color = pic.data[source_index as usize];
-                put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            // different from the window size
+            for y in 0..pic.height {
+                for x in 0..pic.width {
+                    let source_index =
+                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                    let color = pic.data[source_index as usize];
+                    put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+                }
             }
-        }
-    }); // TODO: can we ignore any error or do we need to handle it?
+        })
+        .unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
 }
 
 fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
-    let _ = texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        let shift_x = TEXTURE_WIDTH / 2 - pic.width;
-        let shift_y = pic.height / 8;
-        // different from the window size
-        for y in 0..pic.height {
-            for x in 0..pic.width {
-                let source_index =
-                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                let color = pic.data[source_index as usize];
-                put_pixel(
-                    buffer,
-                    pitch,
-                    x + shift_x,
-                    y + shift_y,
-                    color_map[color as usize],
-                );
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            let shift_x = TEXTURE_WIDTH / 2 - pic.width;
+            let shift_y = pic.height / 8;
+            // different from the window size
+            for y in 0..pic.height {
+                for x in 0..pic.width {
+                    let source_index =
+                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                    let color = pic.data[source_index as usize];
+                    put_pixel(
+                        buffer,
+                        pitch,
+                        x + shift_x,
+                        y + shift_y,
+                        color_map[color as usize],
+                    );
+                }
             }
-        }
-    }); // TODO: can we ignore any error or do we need to handle it?
+        })
+        .unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
 }
 
 fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8)) {
