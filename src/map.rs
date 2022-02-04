@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::{fmt, fs};
 
-const MAP_WIDTH: usize = 64;
-const MAP_HEIGHT: usize = 64;
+pub const WIDTH: usize = 64;
+pub const HEIGHT: usize = 64;
 
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
 // some map format info: https://moddingwiki.shikadi.net/wiki/GameMaps_Format
@@ -158,10 +158,10 @@ fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -
     let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
     let bytes = rlew_decompress(&decarmackized[4..], magic_rlew_word);
     let mut bytes = bytes.chunks_exact(2).map(|word| u16::from_le_bytes(word.try_into().unwrap()));
-    let mut result = [[0; MAP_HEIGHT]; MAP_WIDTH];
-    for x in 0..MAP_WIDTH {
-        for y in 0..MAP_HEIGHT {
-            result[x][y] = bytes.next().unwrap();
+    let mut result = [[0; HEIGHT]; WIDTH];
+    for x in result.iter_mut().take(WIDTH){
+        for xy in x.iter_mut().take(HEIGHT) {
+            *xy = bytes.next().unwrap();
         }
     }
     result
@@ -218,8 +218,8 @@ pub fn load_maps<P: AsRef<Path>>(maphead: P, gamemaps: P, keep_n_first: Option<u
 
 impl fmt::Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
+        for x in 0..WIDTH {
+            for y in 0..HEIGHT {
                 let word = self.plane0[x][y];
                 if word == 90 {
                     write!(f, "|").unwrap();

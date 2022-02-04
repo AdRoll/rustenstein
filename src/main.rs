@@ -16,7 +16,7 @@ mod cache;
 mod map_data;
 type ColorMap = [(u8, u8, u8); 256];
 mod input_manager;
-mod map_parser;
+mod map;
 mod ray_caster;
 
 use crate::ray_caster::RayHit;
@@ -42,7 +42,7 @@ pub fn main() {
     let view_height = height - STATUS_LINES * scale_factor;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
-    let maps = map_parser::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
+    let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
     println!("MAP1 \n{}", maps[0]);
 
     let level = 0;
