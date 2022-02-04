@@ -1,6 +1,9 @@
 use std::path::Path;
 use std::{fmt, fs};
 
+const MAP_WIDTH: usize = 64;
+const MAP_HEIGHT: usize = 64;
+
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
 // some map format info: https://moddingwiki.shikadi.net/wiki/GameMaps_Format
 // on the RLEW compression algorithm: https://moddingwiki.shikadi.net/wiki/Id_Software_RLEW_compression
@@ -47,6 +50,7 @@ impl MapLevelHeader {
     pub fn new(header_data: &[u8]) -> Self {
         assert_eq!(header_data.len(), 38);
         MapLevelHeader {
+            // TODO can this be simplified by reading the entire struct based on its C types?
             offset_plane0: i32::from_le_bytes(header_data[0..4].try_into().unwrap()),
             offset_plane1: i32::from_le_bytes(header_data[4..8].try_into().unwrap()),
             offset_plane2: i32::from_le_bytes(header_data[8..12].try_into().unwrap()),
@@ -148,24 +152,25 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
     output
 }
 
-fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -> Option<Vec<u8>> {
-    if offset > 0 {
-        let plane_start = offset as usize;
-        let plane_end = plane_start + length as usize;
-        let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
-        Some(rlew_decompress(&decarmackized[4..], magic_rlew_word))
-    } else {
-        None
+fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -> [[u16; 64]; 64] {
+    let plane_start = offset as usize;
+    let plane_end = plane_start + length as usize;
+    let decarmackized = carmack_decompress(&data[plane_start..plane_end]);
+    let bytes = rlew_decompress(&decarmackized[4..], magic_rlew_word);
+    let mut bytes = bytes.chunks_exact(2).map(|word| u16::from_le_bytes(word.try_into().unwrap()));
+    let mut result = [[0; MAP_HEIGHT]; MAP_WIDTH];
+    for x in 0..MAP_WIDTH {
+        for y in 0..MAP_HEIGHT {
+            result[x][y] = bytes.next().unwrap();
+        }
     }
+    result
 }
 
 #[derive(Debug)]
 pub struct Map {
-    plane0: Option<Vec<u8>>,
-    plane1: Option<Vec<u8>>,
-    plane2: Option<Vec<u8>>,
-    width_n_tiles: u16,
-    height_n_tiles: u16,
+    plane0: [[u16; 64]; 64],
+    plane1: [[u16; 64]; 64],
     name: String,
 }
 
@@ -177,6 +182,14 @@ fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
         let pointer = pointer as usize;
         let header = MapLevelHeader::new(&raw_data[pointer..(pointer + 38)]);
 
+        if header.offset_plane0 == 0 {
+            continue;
+        }
+
+        assert_eq!(64, header.width_n_tiles);
+        assert_eq!(64, header.height_n_tiles);
+
+        // plane2 is unused in wolf, skipping
         maps.push(Map {
             plane0: get_plane(
                 &raw_data,
@@ -190,14 +203,6 @@ fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
                 header.length_plane1,
                 &meta.magic,
             ),
-            plane2: get_plane(
-                &raw_data,
-                header.offset_plane2,
-                header.length_plane2,
-                &meta.magic,
-            ),
-            width_n_tiles: header.width_n_tiles,
-            height_n_tiles: header.height_n_tiles,
             name: header.name,
         });
     }
@@ -213,15 +218,9 @@ pub fn load_maps<P: AsRef<Path>>(maphead: P, gamemaps: P, keep_n_first: Option<u
 
 impl fmt::Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let plane = self.plane0.as_ref().unwrap();
-
-        plane
-            .chunks_exact(2)
-            .map(|word| u16::from_le_bytes(word.try_into().unwrap()))
-            .enumerate()
-            .for_each(|(word_i, word)| {
-                let x = word_i % usize::from(self.width_n_tiles);
-                // let y = word_i / usize::from(self.height_n_tiles);
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                let word = self.plane0[x][y];
                 if word == 90 {
                     write!(f, "|").unwrap();
                 } else if word == 91 {
@@ -231,12 +230,9 @@ impl fmt::Display for Map {
                 } else {
                     write!(f, " ").unwrap();
                 }
-                // write!(f, "{} ", &word).unwrap();
-                if x == usize::from(self.width_n_tiles) - 1 {
-                    writeln!(f).unwrap();
-                }
-            });
-
+            }
+            writeln!(f).unwrap();
+        }
         Ok(())
     }
 }

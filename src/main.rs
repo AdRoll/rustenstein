@@ -43,6 +43,8 @@ pub fn main() {
     let view_center = view_height / 2;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
+    let maps = map_parser::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
+    println!("MAP1 \n{}", maps[0]);
 
     let level = 0;
     let sdl_context = sdl2::init().unwrap();
