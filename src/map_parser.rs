@@ -313,13 +313,6 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn dump_map0_plane0_bin() {
-        let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
-        fs::write("test_map0_plane0.bin", maps[0].plane0.as_ref().unwrap()).unwrap();
-    }
-
-    #[test]
-    #[ignore]
     fn dump_map0_plane0_printout() {
         let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
         let mut file = fs::File::create("test_map0.txt").unwrap();
