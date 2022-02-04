@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v1
+      - name: install SDL2
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install --no-install-recommends -y libsdl2-dev
+
+      - name: check
+        run: cargo check
+      - name: fmt check
+        run: cargo fmt --all -- --check
+      - name: clippy (fail on warnings)
+        run: cargo clippy -- -D warnings
+      - name: unit tests
+        run: cargo test

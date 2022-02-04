@@ -136,7 +136,7 @@ fn carmack_decompress(compressed_data: &[u8]) -> Vec<u8> {
                 word_i += 1;
             }
             word_bytes => {
-                output.extend_from_slice(&word_bytes);
+                output.extend_from_slice(word_bytes);
             }
         }
 
