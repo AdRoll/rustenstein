@@ -14,7 +14,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          components: rustfmt
+          components: rustfmt, clippy
       - name: install SDL2
         run: |
           sudo apt-get update -y
@@ -24,5 +24,7 @@ jobs:
         run: cargo check
       - name: fmt check
         run: cargo fmt --all -- --check
+      - name: clippy (fail on warnings)
+        run: cargo clippy -- -D warnings
       - name: unit tests
         run: cargo test
