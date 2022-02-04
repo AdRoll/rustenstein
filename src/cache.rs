@@ -197,9 +197,8 @@ impl Cache {
         &self.sounds[index]
     }
 
-    // FIXME take episode and level instead of generic index
-    pub fn get_map(&self, index: usize) -> &Map {
-        &self.maps[index]
+    pub fn get_map(&self, episode: usize, level: usize) -> &Map {
+        &self.maps[level + 10 * episode]
     }
 }
 

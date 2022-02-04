@@ -41,13 +41,10 @@ pub fn main() {
     let view_height = height - STATUS_LINES * scale_factor;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
-    let level = 1;
-    let map = cache.get_map(level);
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
     let video_subsystem = sdl_context.video().unwrap();
     // let mut event_pump = sdl_context.event_pump().unwrap();
-
     let color_map = build_color_map();
     let titlepic = cache.get_pic(cache::TITLEPIC);
     let statuspic = cache.get_pic(cache::STATUSBARPIC);
@@ -56,6 +53,10 @@ pub fn main() {
     let righteye_facepic = cache.get_pic(cache::FACE1CPIC);
     let (weapon_shape, weapon_data) = cache.get_sprite(209);
 
+    // we only support episode 0 for now -- the shareware one
+    let episode = 0;
+    let level = 0;
+    let map = cache.get_map(episode, level);
     let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
 
     let window = video_subsystem
