@@ -3,6 +3,7 @@ use std::{fmt, fs};
 
 pub const WIDTH: usize = 64;
 pub const HEIGHT: usize = 64;
+const NUM_MAPS: usize = 60;
 
 // see some map plans here: https://wolfenstein.fandom.com/wiki/Wolfenstein_3D
 // some map format info: https://moddingwiki.shikadi.net/wiki/GameMaps_Format
@@ -18,14 +19,14 @@ struct MapHead {
     title: Vec<u8>, // so far empty in map files we've seen, no idea what to do with this for now... could probably be a string
 }
 
-fn parse_map_head<P: AsRef<Path>>(path: P, keep_n_first: Option<usize>) -> MapHead {
+fn parse_map_head<P: AsRef<Path>>(path: P) -> MapHead {
     let raw_data = fs::read(path).expect("could not read MAPHEAD file");
 
     MapHead {
         magic: raw_data[0..2].try_into().unwrap(),
         pointers: raw_data[2..=(4 * 100)]
             .chunks_exact(4)
-            .take(keep_n_first.unwrap_or(100))
+            .take(NUM_MAPS)
             .map(|x| i32::from_le_bytes(x.try_into().unwrap()))
             .filter(|&x| x > 0)
             .collect(),
@@ -280,8 +281,8 @@ fn parse_map_data<P: AsRef<Path>>(path: P, meta: MapHead) -> Vec<Map> {
 
 // FIXME improve this loading interface
 /// Made with MAPHEAD.WL1 and GAMEMAPS.WL1 in mind
-pub fn load_maps<P: AsRef<Path>>(maphead: P, gamemaps: P, keep_n_first: Option<usize>) -> Vec<Map> {
-    let metadata = parse_map_head(maphead, keep_n_first);
+pub fn load_maps<P: AsRef<Path>>(maphead: P, gamemaps: P) -> Vec<Map> {
+    let metadata = parse_map_head(maphead);
     parse_map_data(gamemaps, metadata)
 }
 
@@ -384,7 +385,7 @@ mod tests {
     #[test]
     #[ignore]
     fn map_file_parsing() {
-        let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(2));
+        let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1");
         assert_eq!("Wolf1 Map1", maps[0].name);
         assert_eq!("Wolf1 Map2", maps[1].name);
     }
@@ -392,7 +393,7 @@ mod tests {
     #[test]
     #[ignore]
     fn dump_map0_plane0_printout() {
-        let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(1));
+        let maps = load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1");
         let mut file = fs::File::create("test_map0.txt").unwrap();
         write!(file, "{}", maps[0]).unwrap();
     }

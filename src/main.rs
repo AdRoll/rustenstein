@@ -41,7 +41,7 @@ pub fn main() {
     let view_height = height - STATUS_LINES * scale_factor;
     let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
-    let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1", Some(2));
+    let maps = map::load_maps("data/MAPHEAD.WL1", "data/GAMEMAPS.WL1");
     let level = 1;
     let map = &maps[level];
     let sdl_context = sdl2::init().unwrap();
