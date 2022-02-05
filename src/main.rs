@@ -28,18 +28,20 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
 
-const TEXTURE_WIDTH: u32 = 320;
-const TEXTURE_HEIGHT: u32 = 200;
+const BASE_WIDTH: u32 = 320;
+const BASE_HEIGHT: u32 = 200;
 const STATUS_LINES: u32 = 40;
+const PIX_WIDTH: u32 = BASE_WIDTH;
+const PIX_HEIGHT: u32 = BASE_HEIGHT - STATUS_LINES;
+const PIX_CENTER: u32 = PIX_HEIGHT / 2;
 const DARKNESS: f64 = 0.75;
 
 pub fn main() {
     let start_time = Instant::now();
     let cache = cache::init();
-    let (width, height, pix_width) = (960, 600, 320);
-    let scale_factor = width / pix_width;
+    let (width, height) = (960, 600);
+    let scale_factor = width / PIX_WIDTH;
     let view_height = height - STATUS_LINES * scale_factor;
-    let pix_height = view_height / scale_factor;
     let pix_center = view_height / scale_factor / 2;
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
@@ -57,7 +59,7 @@ pub fn main() {
     let episode = 0;
     let level = 0;
     let map = cache.get_map(episode, level);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, PIX_WIDTH, PIX_HEIGHT);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -96,7 +98,7 @@ pub fn main() {
 
         // fake walls
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, pix_width, pix_height)
+            .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
             .unwrap();
 
         // TODO reduce duplication
@@ -107,18 +109,18 @@ pub fn main() {
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
                 let vm = view_height / scale_factor / 2;
 
-                for x in 0..pix_width {
-                    for y in 0..pix_height / 2 {
+                for x in 0..PIX_WIDTH {
+                    for y in 0..PIX_HEIGHT / 2 {
                         let ceilings = darken_color(ceiling, vm - y, pix_center);
                         put_pixel(buffer, pitch, x, y, ceilings);
                     }
-                    for y in pix_height / 2..pix_height {
+                    for y in PIX_HEIGHT / 2..PIX_HEIGHT {
                         let floors = darken_color(floor, y - vm, pix_center);
                         put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
 
-                for x in 0..pix_width {
+                for x in 0..PIX_WIDTH {
                     let mut color = if ray_hits[x as usize].horizontal {
                         color_map[150]
                     } else {
@@ -138,8 +140,8 @@ pub fn main() {
                 }
 
                 simple_scale_shape(
-                    pix_width,
-                    pix_height,
+                    PIX_WIDTH,
+                    PIX_HEIGHT,
                     color_map,
                     buffer,
                     pitch,
@@ -157,7 +159,7 @@ pub fn main() {
 
         // show status picture
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, TEXTURE_WIDTH, TEXTURE_HEIGHT)
+            .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
             .unwrap();
 
         draw_to_texture(&mut texture, statuspic, color_map);
@@ -326,7 +328,7 @@ fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
 fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
     texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            let shift_x = TEXTURE_WIDTH / 2 - pic.width;
+            let shift_x = BASE_WIDTH / 2 - pic.width;
             let shift_y = pic.height / 8;
             // different from the window size
             for y in 0..pic.height {
