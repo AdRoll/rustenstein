@@ -12,6 +12,8 @@ use sdl2::video::WindowContext;
 use sdl2::EventPump;
 use std::time::Instant;
 
+use clap::Parser;
+
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
 mod input_manager;
@@ -36,13 +38,31 @@ const PIX_HEIGHT: u32 = BASE_HEIGHT - STATUS_LINES;
 const PIX_CENTER: u32 = PIX_HEIGHT / 2;
 const DARKNESS: f64 = 0.75;
 
+/// Run Wolfenstein 3D
+#[derive(Parser, Debug)]
+struct Opts {
+    /// The scale factor to use for the resolution. 1 means 320x200, 2 640x400, etc.
+    #[clap(short, long, default_value="3", possible_values=["1","2","3","4","5"])]
+    scale: u32,
+
+    /// Game difficulty level, 0=baby, 1=easy, 2=normal, 3=hard
+    #[clap(short, long, default_value="0", possible_values=["0", "1","2","3"])]
+    dificulty: usize,
+
+    /// Level to load. Only the shareware episode levels are supported for now.
+    #[clap(short, long, default_value="1", possible_values=["1","2","3","4","5","6","7","8","9","10"])]
+    level: usize,
+}
+
 pub fn main() {
+    let args = Opts::parse();
+    let scale_factor = args.scale;
+    let width = BASE_WIDTH * scale_factor;
+    let height = BASE_HEIGHT * scale_factor;
+
     let start_time = Instant::now();
     let cache = cache::init();
-    let (width, height) = (960, 600);
-    let scale_factor = width / PIX_WIDTH;
-    let view_height = height - STATUS_LINES * scale_factor;
-    let pix_center = view_height / scale_factor / 2;
+    let view_height = PIX_HEIGHT * scale_factor;
     let sdl_context = sdl2::init().unwrap();
     //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
     let video_subsystem = sdl_context.video().unwrap();
@@ -57,7 +77,7 @@ pub fn main() {
 
     // we only support episode 0 for now -- the shareware one
     let episode = 0;
-    let level = 0;
+    let level = args.level - 1;
     let map = cache.get_map(episode, level);
     let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, PIX_WIDTH, PIX_HEIGHT);
 
@@ -111,11 +131,11 @@ pub fn main() {
 
                 for x in 0..PIX_WIDTH {
                     for y in 0..PIX_HEIGHT / 2 {
-                        let ceilings = darken_color(ceiling, vm - y, pix_center);
+                        let ceilings = darken_color(ceiling, vm - y, PIX_CENTER);
                         put_pixel(buffer, pitch, x, y, ceilings);
                     }
                     for y in PIX_HEIGHT / 2..PIX_HEIGHT {
-                        let floors = darken_color(floor, y - vm, pix_center);
+                        let floors = darken_color(floor, y - vm, PIX_CENTER);
                         put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
@@ -127,14 +147,14 @@ pub fn main() {
                         color_map[155]
                     };
                     let current = match ray_hits[x as usize].height {
-                        rh if rh > pix_center => pix_center,
+                        rh if rh > PIX_CENTER => PIX_CENTER,
                         rh => rh,
                     };
 
                     // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                    color = darken_color(color, current, pix_center);
+                    color = darken_color(color, current, PIX_CENTER);
 
-                    for y in pix_center - current..pix_center + current {
+                    for y in PIX_CENTER - current..PIX_CENTER + current {
                         put_pixel(buffer, pitch, x, y, color);
                     }
                 }
