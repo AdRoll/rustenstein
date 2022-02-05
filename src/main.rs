@@ -105,7 +105,7 @@ pub fn main() {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
-                let vm = view_height / 6;
+                let vm = view_height / scale_factor / 2;
 
                 for x in 0..pix_width {
                     for y in 0..pix_height / 2 {
