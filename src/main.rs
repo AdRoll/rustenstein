@@ -59,15 +59,14 @@ pub fn main() {
     let scale_factor = args.scale;
     let width = BASE_WIDTH * scale_factor;
     let height = BASE_HEIGHT * scale_factor;
+    let view_height = PIX_HEIGHT * scale_factor;
 
     let start_time = Instant::now();
-    let cache = cache::init();
-    let view_height = PIX_HEIGHT * scale_factor;
     let sdl_context = sdl2::init().unwrap();
-    //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
     let video_subsystem = sdl_context.video().unwrap();
-    // let mut event_pump = sdl_context.event_pump().unwrap();
+
     let color_map = build_color_map();
+    let cache = cache::init();
     let titlepic = cache.get_pic(cache::TITLEPIC);
     let statuspic = cache.get_pic(cache::STATUSBARPIC);
     let default_facepic = cache.get_pic(cache::FACE1APIC);
@@ -79,6 +78,7 @@ pub fn main() {
     let episode = 0;
     let level = args.level - 1;
     let map = cache.get_map(episode, level);
+
     let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, PIX_WIDTH, PIX_HEIGHT);
 
     let window = video_subsystem
@@ -100,15 +100,7 @@ pub fn main() {
     ray_caster.tick(map).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
     ray_caster.wait_for_key(map);
 
-    //input_manager.wait_for_key();
-    //let mut control_info = input_manager::ControlInfo::default();
-
     'main_loop: loop {
-        //input_manager.read_control(&mut control_info);
-
-        //if input_manager.should_exit() {
-        //    break 'main_loop;
-        //}
         let ray_hits = match ray_caster.tick(map) {
             Ok(hits) => hits,
             Err(_) => {
@@ -121,7 +113,6 @@ pub fn main() {
             .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
             .unwrap();
 
-        // TODO reduce duplication
         texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 // draw floor and ceiling colors
@@ -207,7 +198,6 @@ pub fn main() {
             .unwrap();
 
         canvas.present();
-        // break 'main_loop;
     }
 }
 
@@ -380,7 +370,6 @@ fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8
 /// Returns an array of colors that maps indexes as used by wolf3d graphics
 /// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.
 fn build_color_map() -> ColorMap {
-    // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
     let palette = [
         (0, 0, 0),
         (0, 0, 42),
