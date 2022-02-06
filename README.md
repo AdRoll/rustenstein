@@ -1,8 +1,8 @@
 # Rustenstein 3D
 
-Wolfenstein 3D port written in rust. This is still a prototype. Details about the development can be read [here](https://tech.nextroll.com/blog/dev/2022/02/02/rustenstein.html).
+Prototype Wolfenstein 3D port written in Rust. Details about the development can be read [here](https://tech.nextroll.com/blog/dev/2022/02/02/rustenstein.html) and a roadmap of future work can be found [here](https://github.com/AdRoll/rustenstein/projects/1).
 
-A roadmap of work can be found [here](https://github.com/AdRoll/rustenstein/projects/1).
+![Gameplay](./rustenstein.gif)
 
 ## Setup
 
