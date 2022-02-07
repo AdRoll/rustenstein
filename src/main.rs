@@ -12,6 +12,8 @@ use sdl2::video::WindowContext;
 use sdl2::EventPump;
 use std::time::Instant;
 
+use clap::Parser;
+
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
 mod input_manager;
@@ -28,24 +30,43 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
 
-const TEXTURE_WIDTH: u32 = 320;
-const TEXTURE_HEIGHT: u32 = 200;
+const BASE_WIDTH: u32 = 320;
+const BASE_HEIGHT: u32 = 200;
 const STATUS_LINES: u32 = 40;
+const PIX_WIDTH: u32 = BASE_WIDTH;
+const PIX_HEIGHT: u32 = BASE_HEIGHT - STATUS_LINES;
+const PIX_CENTER: u32 = PIX_HEIGHT / 2;
 const DARKNESS: f64 = 0.75;
 
+/// Run Wolfenstein 3D
+#[derive(Parser, Debug)]
+struct Opts {
+    /// The scale factor to use for the resolution. 1 means 320x200, 2 640x400, etc.
+    #[clap(short, long, default_value="3", possible_values=["1","2","3","4","5"])]
+    scale: u32,
+
+    /// Game difficulty level, 0=baby, 1=easy, 2=normal, 3=hard
+    #[clap(short, long, default_value="0", possible_values=["0", "1","2","3"])]
+    dificulty: usize,
+
+    /// Level to load. Only the shareware episode levels are supported for now.
+    #[clap(short, long, default_value="1", possible_values=["1","2","3","4","5","6","7","8","9","10"])]
+    level: usize,
+}
+
 pub fn main() {
+    let args = Opts::parse();
+    let scale_factor = args.scale;
+    let width = BASE_WIDTH * scale_factor;
+    let height = BASE_HEIGHT * scale_factor;
+    let view_height = PIX_HEIGHT * scale_factor;
+
     let start_time = Instant::now();
-    let cache = cache::init();
-    let (width, height, pix_width) = (960, 600, 320);
-    let scale_factor = width / pix_width;
-    let view_height = height - STATUS_LINES * scale_factor;
-    let pix_height = view_height / scale_factor;
-    let pix_center = view_height / scale_factor / 2;
     let sdl_context = sdl2::init().unwrap();
-    //let mut input_manager = input_manager::InputManager::startup(&sdl_context);
     let video_subsystem = sdl_context.video().unwrap();
-    // let mut event_pump = sdl_context.event_pump().unwrap();
+
     let color_map = build_color_map();
+    let cache = cache::init();
     let titlepic = cache.get_pic(cache::TITLEPIC);
     let statuspic = cache.get_pic(cache::STATUSBARPIC);
     let default_facepic = cache.get_pic(cache::FACE1APIC);
@@ -55,9 +76,10 @@ pub fn main() {
 
     // we only support episode 0 for now -- the shareware one
     let episode = 0;
-    let level = 0;
+    let level = args.level - 1;
     let map = cache.get_map(episode, level);
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, pix_width, pix_height);
+
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, PIX_WIDTH, PIX_HEIGHT);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -78,15 +100,7 @@ pub fn main() {
     ray_caster.tick(map).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
     ray_caster.wait_for_key(map);
 
-    //input_manager.wait_for_key();
-    //let mut control_info = input_manager::ControlInfo::default();
-
     'main_loop: loop {
-        //input_manager.read_control(&mut control_info);
-
-        //if input_manager.should_exit() {
-        //    break 'main_loop;
-        //}
         let ray_hits = match ray_caster.tick(map) {
             Ok(hits) => hits,
             Err(_) => {
@@ -96,50 +110,49 @@ pub fn main() {
 
         // fake walls
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, pix_width, pix_height)
+            .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
             .unwrap();
 
-        // TODO reduce duplication
         texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
                 let ceiling = color_map[VGA_CEILING_COLORS[level]];
-                let vm = view_height / 6;
+                let vm = view_height / scale_factor / 2;
 
-                for x in 0..pix_width {
-                    for y in 0..pix_height / 2 {
-                        let ceilings = darken_color(ceiling, vm - y, pix_center);
+                for x in 0..PIX_WIDTH {
+                    for y in 0..PIX_HEIGHT / 2 {
+                        let ceilings = darken_color(ceiling, vm - y, PIX_CENTER);
                         put_pixel(buffer, pitch, x, y, ceilings);
                     }
-                    for y in pix_height / 2..pix_height {
-                        let floors = darken_color(floor, y - vm, pix_center);
+                    for y in PIX_HEIGHT / 2..PIX_HEIGHT {
+                        let floors = darken_color(floor, y - vm, PIX_CENTER);
                         put_pixel(buffer, pitch, x, y, floors);
                     }
                 }
 
-                for x in 0..pix_width {
+                for x in 0..PIX_WIDTH {
                     let mut color = if ray_hits[x as usize].horizontal {
                         color_map[150]
                     } else {
                         color_map[155]
                     };
                     let current = match ray_hits[x as usize].height {
-                        rh if rh > pix_center => pix_center,
+                        rh if rh > PIX_CENTER => PIX_CENTER,
                         rh => rh,
                     };
 
                     // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                    color = darken_color(color, current, pix_center);
+                    color = darken_color(color, current, PIX_CENTER);
 
-                    for y in pix_center - current..pix_center + current {
+                    for y in PIX_CENTER - current..PIX_CENTER + current {
                         put_pixel(buffer, pitch, x, y, color);
                     }
                 }
 
                 simple_scale_shape(
-                    pix_width,
-                    pix_height,
+                    PIX_WIDTH,
+                    PIX_HEIGHT,
                     color_map,
                     buffer,
                     pitch,
@@ -157,7 +170,7 @@ pub fn main() {
 
         // show status picture
         let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, TEXTURE_WIDTH, TEXTURE_HEIGHT)
+            .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
             .unwrap();
 
         draw_to_texture(&mut texture, statuspic, color_map);
@@ -185,7 +198,6 @@ pub fn main() {
             .unwrap();
 
         canvas.present();
-        // break 'main_loop;
     }
 }
 
@@ -326,7 +338,7 @@ fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
 fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
     texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            let shift_x = TEXTURE_WIDTH / 2 - pic.width;
+            let shift_x = BASE_WIDTH / 2 - pic.width;
             let shift_y = pic.height / 8;
             // different from the window size
             for y in 0..pic.height {
@@ -358,7 +370,6 @@ fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8
 /// Returns an array of colors that maps indexes as used by wolf3d graphics
 /// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.
 fn build_color_map() -> ColorMap {
-    // [SDL_Color(r*255//63, g*255//63, b*255//63, 0) for r, g, b in COLORS]
     let palette = [
         (0, 0, 0),
         (0, 0, 42),
