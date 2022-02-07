@@ -91,23 +91,12 @@ impl RayCaster {
         }
     }
 
-    pub fn wait_for_key(&mut self, map: &Map, event_pump: &mut EventPump) {
+    pub fn wait_for_key(&mut self, event_pump: &mut EventPump) {
         'running: loop {
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
-                    _ => {
-                        draw_map(map, &mut self.canvas);
-                        let _hits = draw_rays(
-                            map,
-                            &mut self.canvas,
-                            &mut self.player,
-                            self.view3d_height,
-                            self.view3d_width,
-                        );
-                        draw_player(&mut self.canvas, &mut self.player);
-                        self.canvas.present();
-                    }
+                    _ => {}
                 }
             }
         }
