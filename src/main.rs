@@ -97,12 +97,19 @@ pub fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
-    let mut texture = texture_creator
+    let mut titlepic_texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
         .unwrap();
-    draw_to_texture(&mut texture, titlepic, color_map);
+    let mut world_texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
+        .unwrap();
+    let mut status_texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
+        .unwrap();
 
-    canvas.copy(&texture, None, None).unwrap();
+    draw_to_texture(&mut titlepic_texture, titlepic, color_map);
+
+    canvas.copy(&titlepic_texture, None, None).unwrap();
     canvas.present();
 
     wait_for_key(&mut event_pump);
@@ -120,12 +127,7 @@ pub fn main() {
         // FIXME is this really necessary or can it be handled by sdl
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
-        // fake walls
-        let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
-            .unwrap();
-
-        texture
+        world_texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
@@ -177,15 +179,11 @@ pub fn main() {
             .unwrap();
 
         canvas
-            .copy(&texture, None, Rect::new(0, 0, width, view_height))
+            .copy(&world_texture, None, Rect::new(0, 0, width, view_height))
             .unwrap();
 
         // show status picture
-        let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
-            .unwrap();
-
-        draw_to_texture(&mut texture, statuspic, color_map);
+        draw_to_texture(&mut status_texture, statuspic, color_map);
 
         let face_to_draw = match start_time.elapsed().as_secs() % 3 {
             0 => default_facepic,
@@ -193,12 +191,12 @@ pub fn main() {
             2 => righteye_facepic,
             _ => unreachable!(),
         };
-        draw_face_to_texture(&mut texture, face_to_draw, color_map);
+        draw_face_to_texture(&mut status_texture, face_to_draw, color_map);
 
         // I don't know why I had to *5 for the height
         canvas
             .copy(
-                &texture,
+                &status_texture,
                 None,
                 Rect::new(
                     0,
