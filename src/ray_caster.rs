@@ -2,7 +2,7 @@ extern crate sdl2;
 
 use num::pow;
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::keyboard::Scancode;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use sdl2::rect::Rect;
@@ -127,50 +127,50 @@ impl RayCaster {
     pub fn tick(&mut self, map: &Map) -> Result<Vec<RayHit>, &str> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
-        //TODO: move this code to a sensible location
+
         for event in self.event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
+                    scancode: Some(Scancode::Escape),
                     ..
                 } => return Err("Goodbye!"),
                 Event::KeyDown {
-                    keycode: Some(Keycode::Left),
+                    scancode: Some(Scancode::Left),
                     ..
                 } => self.left_down = true,
                 Event::KeyUp {
-                    keycode: Some(Keycode::Left),
+                    scancode: Some(Scancode::Left),
                     ..
                 } => {
                     self.left_down = false;
                 }
                 Event::KeyDown {
-                    keycode: Some(Keycode::Right),
+                    scancode: Some(Scancode::Right),
                     ..
                 } => self.right_down = true,
                 Event::KeyUp {
-                    keycode: Some(Keycode::Right),
+                    scancode: Some(Scancode::Right),
                     ..
                 } => {
                     self.right_down = false;
                 }
                 Event::KeyDown {
-                    keycode: Some(Keycode::Up),
+                    scancode: Some(Scancode::Up),
                     ..
                 } => self.up_down = true,
                 Event::KeyUp {
-                    keycode: Some(Keycode::Up),
+                    scancode: Some(Scancode::Up),
                     ..
                 } => {
                     self.up_down = false;
                 }
                 Event::KeyDown {
-                    keycode: Some(Keycode::Down),
+                    scancode: Some(Scancode::Down),
                     ..
                 } => self.down_down = true,
                 Event::KeyUp {
-                    keycode: Some(Keycode::Down),
+                    scancode: Some(Scancode::Down),
                     ..
                 } => {
                     self.down_down = false;
