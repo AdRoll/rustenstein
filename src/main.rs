@@ -5,6 +5,7 @@ extern crate sdl2;
 use cache::Picture;
 use core::slice::Iter;
 use sdl2::event::Event;
+use sdl2::keyboard::Scancode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{RenderTarget, Texture};
@@ -32,6 +33,9 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x2d, 0xdd, 0xdd, 0x9d, 0x2d, 0x4d, 0x1d, 0xdd, 0x7d, 0x1d, 0x2d, 0x2d, 0xdd, 0xd7, 0x1d, 0x1d,
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
+
+const ROTATE_SPEED: f64 = 0.02;
+const MOVE_SPEED: f64 = 2.5;
 
 const BASE_WIDTH: u32 = 320;
 const BASE_HEIGHT: u32 = 200;
@@ -104,7 +108,7 @@ pub fn main() {
     wait_for_key(&mut event_pump);
 
     'main_loop: loop {
-        match ray_caster.process_input(&mut event_pump, &mut player) {
+        match process_input(&mut event_pump, &mut player) {
             Ok(hits) => hits,
             Err(_) => {
                 break 'main_loop;
@@ -210,7 +214,7 @@ pub fn main() {
 }
 
 // FIXME this is duplicated in input manager. move over there
-pub fn wait_for_key(event_pump: &mut EventPump) {
+fn wait_for_key(event_pump: &mut EventPump) {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -219,6 +223,37 @@ pub fn wait_for_key(event_pump: &mut EventPump) {
             }
         }
     }
+}
+
+fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Result<(), String> {
+    for event in event_pump.poll_iter() {
+        if let Event::Quit { .. }
+        | Event::KeyDown {
+            scancode: Some(Scancode::Escape),
+            ..
+        } = event
+        {
+            return Err(String::from("Goodbye!"));
+        };
+    }
+
+    let keyboard = event_pump.keyboard_state();
+    if keyboard.is_scancode_pressed(Scancode::Left) {
+        player.angle += ROTATE_SPEED;
+    }
+    if keyboard.is_scancode_pressed(Scancode::Right) {
+        player.angle -= ROTATE_SPEED;
+    }
+    player.angle = constants::norm_angle(player.angle);
+    if keyboard.is_scancode_pressed(Scancode::Up) {
+        player.x += player.angle.sin() * MOVE_SPEED;
+        player.y += player.angle.cos() * MOVE_SPEED;
+    }
+    if keyboard.is_scancode_pressed(Scancode::Down) {
+        player.x -= player.angle.sin() * MOVE_SPEED;
+        player.y -= player.angle.cos() * MOVE_SPEED;
+    }
+    Ok(())
 }
 
 fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {

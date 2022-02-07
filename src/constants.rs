@@ -10,3 +10,9 @@ pub const ANGLE_DOWN: f64 = 0.0;
 pub const ANGLE_UP: f64 = PI;
 pub const ANGLE_LEFT: f64 = 3.0 * PI / 2.0;
 pub const ANGLE_RIGHT: f64 = PI / 2.0;
+
+// ok this is not a constant, we may move it to an util module later, or rename this
+pub fn norm_angle(a: f64) -> f64 {
+    let nrots = (a / (2.0 * PI)).trunc() - if a < 0.0 { 1.0 } else { 0.0 };
+    a - nrots * 2.0 * PI
+}

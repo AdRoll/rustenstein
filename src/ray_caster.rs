@@ -6,7 +6,6 @@ use crate::map::{Direction, Map, Tile};
 use crate::player::Player;
 use num::pow;
 use sdl2::event::Event;
-use sdl2::keyboard::Scancode;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use sdl2::rect::Rect;
@@ -18,8 +17,6 @@ use std::f64::consts::PI;
 
 const PLAYER_DIAM: i32 = 6;
 const PLAYER_LEN: f64 = 40.0;
-const ROTATE_SPEED: f64 = 0.02;
-const MOVE_SPEED: f64 = 2.5;
 const FIELD_OF_VIEW: f64 = PI / 2.0;
 
 const TILE_SIZE: u32 = 4;
@@ -73,41 +70,6 @@ impl RayCaster {
         draw_player(&mut self.canvas, player);
         self.canvas.present();
         hits
-    }
-
-    pub fn process_input(
-        &mut self,
-        event_pump: &mut EventPump,
-        player: &mut Player,
-    ) -> Result<(), &str> {
-        for event in event_pump.poll_iter() {
-            if let Event::Quit { .. }
-            | Event::KeyDown {
-                scancode: Some(Scancode::Escape),
-                ..
-            } = event
-            {
-                return Err("Goodbye!");
-            };
-        }
-
-        let keyboard = event_pump.keyboard_state();
-        if keyboard.is_scancode_pressed(Scancode::Left) {
-            player.angle += ROTATE_SPEED;
-        }
-        if keyboard.is_scancode_pressed(Scancode::Right) {
-            player.angle -= ROTATE_SPEED;
-        }
-        player.angle = norm_angle(player.angle);
-        if keyboard.is_scancode_pressed(Scancode::Up) {
-            player.x += player.angle.sin() * MOVE_SPEED;
-            player.y += player.angle.cos() * MOVE_SPEED;
-        }
-        if keyboard.is_scancode_pressed(Scancode::Down) {
-            player.x -= player.angle.sin() * MOVE_SPEED;
-            player.y -= player.angle.cos() * MOVE_SPEED;
-        }
-        Ok(())
     }
 }
 
@@ -309,11 +271,6 @@ fn cdiv(x: f64, scale: u32, updown: f64) -> usize {
 
 fn ctrunc(x: f64, scale: u32, updown: f64) -> f64 {
     (x / scale as f64 + updown).trunc() * scale as f64
-}
-
-fn norm_angle(a: f64) -> f64 {
-    let nrots = (a / (2.0 * PI)).trunc() - if a < 0.0 { 1.0 } else { 0.0 };
-    a - nrots * 2.0 * PI
 }
 
 fn distance(player: &Player, x: f64, y: f64) -> f64 {
