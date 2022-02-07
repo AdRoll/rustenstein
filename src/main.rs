@@ -64,6 +64,7 @@ pub fn main() {
     let start_time = Instant::now();
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let mut event_pump = sdl_context.event_pump().unwrap();
 
     let color_map = build_color_map();
     let cache = cache::init();
@@ -97,11 +98,11 @@ pub fn main() {
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
 
-    ray_caster.tick(map).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
-    ray_caster.wait_for_key(map);
+    ray_caster.tick(map, &mut event_pump).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
+    ray_caster.wait_for_key(map, &mut event_pump);
 
     'main_loop: loop {
-        let ray_hits = match ray_caster.tick(map) {
+        let ray_hits = match ray_caster.tick(map, &mut event_pump) {
             Ok(hits) => hits,
             Err(_) => {
                 break 'main_loop;

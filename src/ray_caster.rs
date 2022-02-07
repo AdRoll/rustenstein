@@ -43,7 +43,6 @@ struct Nothing;
 
 pub struct RayCaster {
     canvas: WindowCanvas,
-    event_pump: EventPump,
     player: Player,
     view3d_width: u32,
     view3d_height: u32,
@@ -67,7 +66,6 @@ impl RayCaster {
         canvas_2d.set_draw_color(Color::RGB(0, 255, 255));
         canvas_2d.clear();
         canvas_2d.present();
-        let pump = sdl_context.event_pump().unwrap();
 
         let (player_x, player_y, player_dir) = map.find_player_start();
         // TODO not sure why thse /3 and /2 are necessary
@@ -83,7 +81,6 @@ impl RayCaster {
 
         RayCaster {
             canvas: canvas_2d,
-            event_pump: pump,
             view3d_width,
             view3d_height,
             player: Player {
@@ -94,9 +91,9 @@ impl RayCaster {
         }
     }
 
-    pub fn wait_for_key(&mut self, map: &Map) {
+    pub fn wait_for_key(&mut self, map: &Map, event_pump: &mut EventPump) {
         'running: loop {
-            for event in self.event_pump.poll_iter() {
+            for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
                     _ => {
@@ -116,11 +113,11 @@ impl RayCaster {
         }
     }
 
-    pub fn tick(&mut self, map: &Map) -> Result<Vec<RayHit>, &str> {
+    pub fn tick(&mut self, map: &Map, event_pump: &mut EventPump) -> Result<Vec<RayHit>, &str> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
 
-        for event in self.event_pump.poll_iter() {
+        for event in event_pump.poll_iter() {
             if let Event::Quit { .. }
             | Event::KeyDown {
                 scancode: Some(Scancode::Escape),
@@ -131,7 +128,7 @@ impl RayCaster {
             };
         }
 
-        let keyboard = self.event_pump.keyboard_state();
+        let keyboard = event_pump.keyboard_state();
         if keyboard.is_scancode_pressed(Scancode::Left) {
             self.player.angle += ROTATE_SPEED;
         }
