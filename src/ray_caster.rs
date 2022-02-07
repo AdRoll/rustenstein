@@ -47,10 +47,6 @@ pub struct RayCaster {
     player: Player,
     view3d_width: u32,
     view3d_height: u32,
-    left_down: bool,
-    right_down: bool,
-    up_down: bool,
-    down_down: bool,
 }
 
 pub struct RayHit {
@@ -95,10 +91,6 @@ impl RayCaster {
                 y: player_y,
                 angle: player_angle,
             },
-            left_down: false,
-            right_down: false,
-            up_down: false,
-            down_down: false,
         }
     }
 
@@ -129,67 +121,29 @@ impl RayCaster {
         self.canvas.clear();
 
         for event in self.event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    scancode: Some(Scancode::Escape),
-                    ..
-                } => return Err("Goodbye!"),
-                Event::KeyDown {
-                    scancode: Some(Scancode::Left),
-                    ..
-                } => self.left_down = true,
-                Event::KeyUp {
-                    scancode: Some(Scancode::Left),
-                    ..
-                } => {
-                    self.left_down = false;
-                }
-                Event::KeyDown {
-                    scancode: Some(Scancode::Right),
-                    ..
-                } => self.right_down = true,
-                Event::KeyUp {
-                    scancode: Some(Scancode::Right),
-                    ..
-                } => {
-                    self.right_down = false;
-                }
-                Event::KeyDown {
-                    scancode: Some(Scancode::Up),
-                    ..
-                } => self.up_down = true,
-                Event::KeyUp {
-                    scancode: Some(Scancode::Up),
-                    ..
-                } => {
-                    self.up_down = false;
-                }
-                Event::KeyDown {
-                    scancode: Some(Scancode::Down),
-                    ..
-                } => self.down_down = true,
-                Event::KeyUp {
-                    scancode: Some(Scancode::Down),
-                    ..
-                } => {
-                    self.down_down = false;
-                }
-                _ => {}
-            }
+            if let Event::Quit { .. }
+            | Event::KeyDown {
+                scancode: Some(Scancode::Escape),
+                ..
+            } = event
+            {
+                return Err("Goodbye!");
+            };
         }
-        if self.left_down {
+
+        let keyboard = self.event_pump.keyboard_state();
+        if keyboard.is_scancode_pressed(Scancode::Left) {
             self.player.angle += ROTATE_SPEED;
         }
-        if self.right_down {
+        if keyboard.is_scancode_pressed(Scancode::Right) {
             self.player.angle -= ROTATE_SPEED;
         }
         self.player.angle = norm_angle(self.player.angle);
-        if self.up_down {
+        if keyboard.is_scancode_pressed(Scancode::Up) {
             self.player.x += self.player.angle.sin() * MOVE_SPEED;
             self.player.y += self.player.angle.cos() * MOVE_SPEED;
         }
-        if self.down_down {
+        if keyboard.is_scancode_pressed(Scancode::Down) {
             self.player.x -= self.player.angle.sin() * MOVE_SPEED;
             self.player.y -= self.player.angle.cos() * MOVE_SPEED;
         }
