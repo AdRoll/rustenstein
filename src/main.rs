@@ -98,7 +98,6 @@ pub fn main() {
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
 
-    ray_caster.tick(map, &mut event_pump).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
     ray_caster.wait_for_key(&mut event_pump);
 
     'main_loop: loop {
