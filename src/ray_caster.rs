@@ -91,17 +91,6 @@ impl RayCaster {
         }
     }
 
-    pub fn wait_for_key(&mut self, event_pump: &mut EventPump) {
-        'running: loop {
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
-                    _ => {}
-                }
-            }
-        }
-    }
-
     pub fn tick(&mut self, map: &Map, event_pump: &mut EventPump) -> Result<Vec<RayHit>, &str> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();

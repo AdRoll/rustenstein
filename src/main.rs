@@ -98,7 +98,7 @@ pub fn main() {
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
 
-    ray_caster.wait_for_key(&mut event_pump);
+    wait_for_key(&mut event_pump);
 
     'main_loop: loop {
         let ray_hits = match ray_caster.tick(map, &mut event_pump) {
@@ -198,6 +198,18 @@ pub fn main() {
             .unwrap();
 
         canvas.present();
+    }
+}
+
+// FIXME this is duplicated in input manager. move over there
+pub fn wait_for_key(event_pump: &mut EventPump) {
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                _ => {}
+            }
+        }
     }
 }
 
