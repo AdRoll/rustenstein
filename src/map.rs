@@ -1,7 +1,6 @@
+use crate::constants::*;
+use crate::player;
 use std::{fmt, fs};
-
-pub const WIDTH: usize = 64;
-pub const HEIGHT: usize = 64;
 
 #[derive(Copy, Clone)]
 pub enum Tile {
@@ -27,15 +26,15 @@ pub enum Actor {
 
 #[derive(Debug)]
 pub struct Map {
-    plane0: [[u16; HEIGHT]; WIDTH],
-    plane1: [[u16; HEIGHT]; WIDTH],
+    plane0: [[u16; MAP_HEIGHT]; MAP_WIDTH],
+    plane1: [[u16; MAP_HEIGHT]; MAP_WIDTH],
     pub name: String,
 }
 
 impl Map {
     pub fn new(
-        plane0: [[u16; HEIGHT]; WIDTH],
-        plane1: [[u16; HEIGHT]; WIDTH],
+        plane0: [[u16; MAP_HEIGHT]; MAP_WIDTH],
+        plane1: [[u16; MAP_HEIGHT]; MAP_WIDTH],
         name: String,
     ) -> Self {
         Self {
@@ -76,9 +75,28 @@ impl Map {
         }
     }
 
+    pub fn find_player(&self) -> player::Player {
+        let (player_x, player_y, player_dir) = self.find_player_start();
+        // TODO not sure why thse /3 and /2 are necessary
+        let player_x = (MAP_SCALE_W * (player_x as u32) + MAP_SCALE_W / 3) as f64;
+        let player_y = (MAP_SCALE_H * (player_y as u32) + MAP_SCALE_H / 2) as f64;
+        let player_angle = match player_dir {
+            Direction::North => ANGLE_UP,
+            Direction::East => ANGLE_RIGHT,
+            Direction::South => ANGLE_DOWN,
+            Direction::West => ANGLE_LEFT,
+        };
+
+        player::Player {
+            x: player_x,
+            y: player_y,
+            angle: player_angle,
+        }
+    }
+
     pub fn find_player_start(&self) -> (u8, u8, Direction) {
-        for x in 0..WIDTH as u8 {
-            for y in 0..HEIGHT as u8 {
+        for x in 0..MAP_WIDTH as u8 {
+            for y in 0..MAP_HEIGHT as u8 {
                 if let Some(Actor::Player(direction)) = self.actor_at(x, y) {
                     return (x, y, direction);
                 }
@@ -90,8 +108,8 @@ impl Map {
 
 impl fmt::Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for x in 0..WIDTH {
-            for y in 0..HEIGHT {
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
                 let word = self.plane0[x][y];
                 if word == 90 {
                     write!(f, "|").unwrap();

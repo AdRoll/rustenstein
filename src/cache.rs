@@ -1,3 +1,4 @@
+use crate::constants::{MAP_HEIGHT, MAP_WIDTH};
 use crate::map;
 use crate::map::Map;
 use std::fs;
@@ -530,9 +531,9 @@ fn get_plane(data: &[u8], offset: i32, length: u16, magic_rlew_word: &[u8; 2]) -
     let mut bytes = bytes
         .chunks_exact(2)
         .map(|word| u16::from_le_bytes(word.try_into().unwrap()));
-    let mut result = [[0; map::HEIGHT]; map::WIDTH];
-    for y in 0..map::HEIGHT {
-        for x in result.iter_mut().take(map::WIDTH) {
+    let mut result = [[0; MAP_HEIGHT]; MAP_WIDTH];
+    for y in 0..MAP_HEIGHT {
+        for x in result.iter_mut().take(MAP_WIDTH) {
             x[y] = bytes.next().unwrap();
         }
     }

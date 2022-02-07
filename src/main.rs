@@ -17,8 +17,10 @@ use clap::Parser;
 
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
+mod constants;
 mod input_manager;
 mod map;
+mod player;
 mod ray_caster;
 
 use crate::ray_caster::RayHit;
@@ -80,8 +82,8 @@ pub fn main() {
     let episode = 0;
     let level = args.level - 1;
     let map = cache.get_map(episode, level);
-
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, PIX_WIDTH, PIX_HEIGHT);
+    let mut player = map.find_player();
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, PIX_WIDTH, PIX_HEIGHT);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -102,14 +104,14 @@ pub fn main() {
     wait_for_key(&mut event_pump);
 
     'main_loop: loop {
-        match ray_caster.process_input(&mut event_pump) {
+        match ray_caster.process_input(&mut event_pump, &mut player) {
             Ok(hits) => hits,
             Err(_) => {
                 break 'main_loop;
             }
         };
 
-        let ray_hits = ray_caster.tick(map);
+        let ray_hits = ray_caster.tick(&player, map);
 
         // FIXME is this really necessary or can it be handled by sdl
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
