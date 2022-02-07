@@ -11,7 +11,6 @@ use sdl2::render::{Canvas, WindowCanvas};
 use sdl2::{EventPump, Sdl};
 use std::cmp::min;
 use std::f64::consts::PI;
-use std::time::Duration;
 
 use crate::map;
 use crate::map::{Direction, Map, Tile};
@@ -91,10 +90,23 @@ impl RayCaster {
         }
     }
 
-    pub fn tick(&mut self, map: &Map, event_pump: &mut EventPump) -> Result<Vec<RayHit>, &str> {
+    pub fn tick(&mut self, map: &Map) -> Vec<RayHit> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
+        draw_map(map, &mut self.canvas);
+        let hits = draw_rays(
+            map,
+            &mut self.canvas,
+            &mut self.player,
+            self.view3d_height,
+            self.view3d_width,
+        );
+        draw_player(&mut self.canvas, &mut self.player);
+        self.canvas.present();
+        hits
+    }
 
+    pub fn process_input(&mut self, event_pump: &mut EventPump) -> Result<(), &str> {
         for event in event_pump.poll_iter() {
             if let Event::Quit { .. }
             | Event::KeyDown {
@@ -122,18 +134,7 @@ impl RayCaster {
             self.player.x -= self.player.angle.sin() * MOVE_SPEED;
             self.player.y -= self.player.angle.cos() * MOVE_SPEED;
         }
-        draw_map(map, &mut self.canvas);
-        let hits = draw_rays(
-            map,
-            &mut self.canvas,
-            &mut self.player,
-            self.view3d_height,
-            self.view3d_width,
-        );
-        draw_player(&mut self.canvas, &mut self.player);
-        self.canvas.present();
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-        Ok(hits)
+        Ok(())
     }
 }
 

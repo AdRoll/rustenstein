@@ -10,6 +10,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{RenderTarget, Texture};
 use sdl2::video::WindowContext;
 use sdl2::EventPump;
+use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
@@ -101,12 +102,17 @@ pub fn main() {
     wait_for_key(&mut event_pump);
 
     'main_loop: loop {
-        let ray_hits = match ray_caster.tick(map, &mut event_pump) {
+        match ray_caster.process_input(&mut event_pump) {
             Ok(hits) => hits,
             Err(_) => {
                 break 'main_loop;
             }
         };
+
+        let ray_hits = ray_caster.tick(map);
+
+        // FIXME is this really necessary or can it be handled by sdl
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
         // fake walls
         let mut texture = texture_creator
