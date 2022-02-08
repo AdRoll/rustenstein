@@ -5,19 +5,23 @@ extern crate sdl2;
 use cache::Picture;
 use core::slice::Iter;
 use sdl2::event::Event;
+use sdl2::keyboard::Scancode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::{RenderTarget, Texture};
 use sdl2::video::WindowContext;
 use sdl2::EventPump;
+use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
 
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
+mod constants;
 mod input_manager;
 mod map;
+mod player;
 mod ray_caster;
 
 use crate::ray_caster::RayHit;
@@ -29,6 +33,9 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x2d, 0xdd, 0xdd, 0x9d, 0x2d, 0x4d, 0x1d, 0xdd, 0x7d, 0x1d, 0x2d, 0x2d, 0xdd, 0xd7, 0x1d, 0x1d,
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
+
+const ROTATE_SPEED: f64 = 0.02;
+const MOVE_SPEED: f64 = 2.5;
 
 const BASE_WIDTH: u32 = 320;
 const BASE_HEIGHT: u32 = 200;
@@ -64,6 +71,7 @@ pub fn main() {
     let start_time = Instant::now();
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let mut event_pump = sdl_context.event_pump().unwrap();
 
     let color_map = build_color_map();
     let cache = cache::init();
@@ -78,8 +86,8 @@ pub fn main() {
     let episode = 0;
     let level = args.level - 1;
     let map = cache.get_map(episode, level);
-
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, map, PIX_WIDTH, PIX_HEIGHT);
+    let mut player = map.find_player();
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, PIX_WIDTH, PIX_HEIGHT);
 
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -89,31 +97,37 @@ pub fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
-    let mut texture = texture_creator
+    let mut titlepic_texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 320, 200)
         .unwrap();
-    draw_to_texture(&mut texture, titlepic, color_map);
+    let mut world_texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
+        .unwrap();
+    let mut status_texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
+        .unwrap();
 
-    canvas.copy(&texture, None, None).unwrap();
+    draw_to_texture(&mut titlepic_texture, titlepic, color_map);
+
+    canvas.copy(&titlepic_texture, None, None).unwrap();
     canvas.present();
 
-    ray_caster.tick(map).unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
-    ray_caster.wait_for_key(map);
+    wait_for_key(&mut event_pump);
 
     'main_loop: loop {
-        let ray_hits = match ray_caster.tick(map) {
+        match process_input(&mut event_pump, &mut player) {
             Ok(hits) => hits,
             Err(_) => {
                 break 'main_loop;
             }
         };
 
-        // fake walls
-        let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, PIX_WIDTH, PIX_HEIGHT)
-            .unwrap();
+        let ray_hits = ray_caster.tick(&player, map);
 
-        texture
+        // FIXME is this really necessary or can it be handled by sdl
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+
+        world_texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 // draw floor and ceiling colors
                 let floor = color_map[VGA_FLOOR_COLOR];
@@ -165,15 +179,11 @@ pub fn main() {
             .unwrap();
 
         canvas
-            .copy(&texture, None, Rect::new(0, 0, width, view_height))
+            .copy(&world_texture, None, Rect::new(0, 0, width, view_height))
             .unwrap();
 
         // show status picture
-        let mut texture = texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
-            .unwrap();
-
-        draw_to_texture(&mut texture, statuspic, color_map);
+        draw_to_texture(&mut status_texture, statuspic, color_map);
 
         let face_to_draw = match start_time.elapsed().as_secs() % 3 {
             0 => default_facepic,
@@ -181,12 +191,12 @@ pub fn main() {
             2 => righteye_facepic,
             _ => unreachable!(),
         };
-        draw_face_to_texture(&mut texture, face_to_draw, color_map);
+        draw_face_to_texture(&mut status_texture, face_to_draw, color_map);
 
         // I don't know why I had to *5 for the height
         canvas
             .copy(
-                &texture,
+                &status_texture,
                 None,
                 Rect::new(
                     0,
@@ -199,6 +209,49 @@ pub fn main() {
 
         canvas.present();
     }
+}
+
+// FIXME this is duplicated in input manager. move over there
+fn wait_for_key(event_pump: &mut EventPump) {
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
+                _ => {}
+            }
+        }
+    }
+}
+
+fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Result<(), String> {
+    for event in event_pump.poll_iter() {
+        if let Event::Quit { .. }
+        | Event::KeyDown {
+            scancode: Some(Scancode::Escape),
+            ..
+        } = event
+        {
+            return Err(String::from("Goodbye!"));
+        };
+    }
+
+    let keyboard = event_pump.keyboard_state();
+    if keyboard.is_scancode_pressed(Scancode::Left) {
+        player.angle += ROTATE_SPEED;
+    }
+    if keyboard.is_scancode_pressed(Scancode::Right) {
+        player.angle -= ROTATE_SPEED;
+    }
+    player.angle = constants::norm_angle(player.angle);
+    if keyboard.is_scancode_pressed(Scancode::Up) {
+        player.x += player.angle.sin() * MOVE_SPEED;
+        player.y += player.angle.cos() * MOVE_SPEED;
+    }
+    if keyboard.is_scancode_pressed(Scancode::Down) {
+        player.x -= player.angle.sin() * MOVE_SPEED;
+        player.y -= player.angle.cos() * MOVE_SPEED;
+    }
+    Ok(())
 }
 
 fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
