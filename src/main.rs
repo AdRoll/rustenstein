@@ -34,9 +34,6 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
 
-const ROTATE_SPEED: f64 = 0.02;
-const MOVE_SPEED: f64 = 2.5;
-
 const BASE_WIDTH: u32 = 320;
 const BASE_HEIGHT: u32 = 200;
 const STATUS_LINES: u32 = 40;
@@ -237,20 +234,21 @@ fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Res
 
     let keyboard = event_pump.keyboard_state();
     if keyboard.is_scancode_pressed(Scancode::Left) {
-        player.angle += ROTATE_SPEED;
+        player.turn_left();
     }
+
     if keyboard.is_scancode_pressed(Scancode::Right) {
-        player.angle -= ROTATE_SPEED;
+        player.turn_right();
     }
-    player.angle = constants::norm_angle(player.angle);
+
     if keyboard.is_scancode_pressed(Scancode::Up) {
-        player.x += player.angle.sin() * MOVE_SPEED;
-        player.y += player.angle.cos() * MOVE_SPEED;
+        player.move_forward();
     }
+
     if keyboard.is_scancode_pressed(Scancode::Down) {
-        player.x -= player.angle.sin() * MOVE_SPEED;
-        player.y -= player.angle.cos() * MOVE_SPEED;
+        player.move_backward();
     }
+
     Ok(())
 }
 
