@@ -9,7 +9,6 @@ pub struct Player {
     pub angle: f64,
 }
 
-
 impl Player {
     pub fn move_forward(&mut self) {
         self.x += self.angle.sin() * MOVE_SPEED;
@@ -30,5 +29,4 @@ impl Player {
         self.angle -= ROTATE_SPEED;
         self.angle = constants::norm_angle(self.angle);
     }
-
 }

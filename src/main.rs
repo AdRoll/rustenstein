@@ -169,9 +169,7 @@ pub fn main() {
             })
             .unwrap();
 
-        canvas
-            .copy(&texture, None, None)
-            .unwrap();
+        canvas.copy(&texture, None, None).unwrap();
 
         // show status picture
         draw_to_texture(&mut texture, statuspic, color_map);
