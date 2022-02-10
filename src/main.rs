@@ -98,7 +98,11 @@ pub fn main() {
         .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
         .unwrap();
 
-    draw_to_texture(&mut texture, titlepic, color_map);
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            draw_to_texture(buffer, pitch, titlepic, color_map);
+        })
+        .unwrap_or_default();
 
     canvas.copy(&texture, None, None).unwrap();
     canvas.present();
@@ -166,36 +170,22 @@ pub fn main() {
                     &weapon_shape.dataofs,
                     weapon_data,
                 );
+
+                // show status picture
+                let status_buffer = &mut buffer[PIX_HEIGHT as usize * pitch..];
+                draw_to_texture(status_buffer, pitch, statuspic, color_map);
+
+                let face_to_draw = match start_time.elapsed().as_secs() % 3 {
+                    0 => default_facepic,
+                    1 => lefteye_facepic,
+                    2 => righteye_facepic,
+                    _ => unreachable!(),
+                };
+                draw_face_to_texture(status_buffer, pitch, face_to_draw, color_map);
             })
             .unwrap();
 
         canvas.copy(&texture, None, None).unwrap();
-
-        // show status picture
-        draw_to_texture(&mut texture, statuspic, color_map);
-
-        let face_to_draw = match start_time.elapsed().as_secs() % 3 {
-            0 => default_facepic,
-            1 => lefteye_facepic,
-            2 => righteye_facepic,
-            _ => unreachable!(),
-        };
-        draw_face_to_texture(&mut texture, face_to_draw, color_map);
-
-        // I don't know why I had to *5 for the height
-        canvas
-            .copy(
-                &texture,
-                None,
-                Rect::new(
-                    0,
-                    view_height as i32,
-                    width,
-                    STATUS_LINES * scale_factor * 5,
-                ),
-            )
-            .unwrap();
-
         canvas.present();
     }
 }
@@ -362,44 +352,36 @@ fn simple_scale_shape(
     }
 }
 
-fn draw_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
-    texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            // different from the window size
-            for y in 0..pic.height {
-                for x in 0..pic.width {
-                    let source_index =
-                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                    let color = pic.data[source_index as usize];
-                    put_pixel(buffer, pitch, x, y, color_map[color as usize]);
-                }
-            }
-        })
-        .unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
+fn draw_to_texture(buffer: &mut [u8], pitch: usize, pic: &Picture, color_map: ColorMap) {
+    // different from the window size
+    for y in 0..pic.height {
+        for x in 0..pic.width {
+            let source_index =
+                (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+            let color = pic.data[source_index as usize];
+            put_pixel(buffer, pitch, x, y, color_map[color as usize]);
+        }
+    }
 }
 
-fn draw_face_to_texture(texture: &mut Texture, pic: &Picture, color_map: ColorMap) {
-    texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            let shift_x = BASE_WIDTH / 2 - pic.width;
-            let shift_y = pic.height / 8;
-            // different from the window size
-            for y in 0..pic.height {
-                for x in 0..pic.width {
-                    let source_index =
-                        (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-                    let color = pic.data[source_index as usize];
-                    put_pixel(
-                        buffer,
-                        pitch,
-                        x + shift_x,
-                        y + shift_y,
-                        color_map[color as usize],
-                    );
-                }
-            }
-        })
-        .unwrap_or_default(); // TODO: can we ignore any error or do we need to handle it?
+fn draw_face_to_texture(buffer: &mut [u8], pitch: usize, pic: &Picture, color_map: ColorMap) {
+    let shift_x = BASE_WIDTH / 2 - pic.width;
+    let shift_y = pic.height / 8;
+    // different from the window size
+    for y in 0..pic.height {
+        for x in 0..pic.width {
+            let source_index =
+                (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+            let color = pic.data[source_index as usize];
+            put_pixel(
+                buffer,
+                pitch,
+                x + shift_x,
+                y + shift_y,
+                color_map[color as usize],
+            );
+        }
+    }
 }
 
 fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8)) {
