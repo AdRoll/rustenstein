@@ -59,6 +59,7 @@ struct Opts {
 }
 
 pub fn main() {
+    // TODO put this stuff in a Video struct, together with texture, canvas etc
     let args = Opts::parse();
     let scale_factor = args.scale;
     let width = BASE_WIDTH * scale_factor;
@@ -77,6 +78,8 @@ pub fn main() {
     let default_facepic = cache.get_pic(cache::FACE1APIC);
     let lefteye_facepic = cache.get_pic(cache::FACE1BPIC);
     let righteye_facepic = cache.get_pic(cache::FACE1CPIC);
+
+    // FIXME use a constant for that 209
     let (weapon_shape, weapon_data) = cache.get_sprite(209);
 
     // we only support episode 0 for now -- the shareware one
@@ -100,7 +103,7 @@ pub fn main() {
 
     texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            draw_to_texture(buffer, pitch, titlepic, color_map);
+            draw_to_texture(buffer, pitch, 0, 0, titlepic, color_map);
         })
         .unwrap_or_default();
 
@@ -173,15 +176,18 @@ pub fn main() {
 
                 // show status picture
                 let status_buffer = &mut buffer[PIX_HEIGHT as usize * pitch..];
-                draw_to_texture(status_buffer, pitch, statuspic, color_map);
+                draw_to_texture(status_buffer, pitch, 0, 0, statuspic, color_map);
 
-                let face_to_draw = match start_time.elapsed().as_secs() % 3 {
+                let facepic = match start_time.elapsed().as_secs() % 3 {
                     0 => default_facepic,
                     1 => lefteye_facepic,
                     2 => righteye_facepic,
                     _ => unreachable!(),
                 };
-                draw_face_to_texture(status_buffer, pitch, face_to_draw, color_map);
+
+                let shift_x = BASE_WIDTH / 2 - facepic.width;
+                let shift_y = facepic.height / 8;
+                draw_to_texture(status_buffer, pitch, shift_x, shift_y, facepic, color_map);
             })
             .unwrap();
 
@@ -352,21 +358,14 @@ fn simple_scale_shape(
     }
 }
 
-fn draw_to_texture(buffer: &mut [u8], pitch: usize, pic: &Picture, color_map: ColorMap) {
-    // different from the window size
-    for y in 0..pic.height {
-        for x in 0..pic.width {
-            let source_index =
-                (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-            let color = pic.data[source_index as usize];
-            put_pixel(buffer, pitch, x, y, color_map[color as usize]);
-        }
-    }
-}
-
-fn draw_face_to_texture(buffer: &mut [u8], pitch: usize, pic: &Picture, color_map: ColorMap) {
-    let shift_x = BASE_WIDTH / 2 - pic.width;
-    let shift_y = pic.height / 8;
+fn draw_to_texture(
+    buffer: &mut [u8],
+    pitch: usize,
+    shift_x: u32,
+    shift_y: u32,
+    pic: &Picture,
+    color_map: ColorMap,
+) {
     // different from the window size
     for y in 0..pic.height {
         for x in 0..pic.width {
