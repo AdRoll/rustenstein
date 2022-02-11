@@ -49,6 +49,7 @@ impl RayCaster {
         canvas_2d.clear();
         canvas_2d.present();
 
+        // FIXME remove state view3d and use constants instead
         RayCaster {
             canvas: canvas_2d,
             view3d_width,
