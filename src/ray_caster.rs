@@ -5,13 +5,6 @@ use crate::map;
 use crate::map::{Direction, Map, Tile};
 use crate::player::Player;
 use num::pow;
-use sdl2::event::Event;
-use sdl2::pixels::Color;
-use sdl2::rect::Point;
-use sdl2::rect::Rect;
-use sdl2::render::RenderTarget;
-use sdl2::render::{Canvas, WindowCanvas};
-use sdl2::{EventPump, Sdl};
 use std::cmp::min;
 use std::f64::consts::PI;
 
@@ -24,97 +17,25 @@ const TILE_SIZE: u32 = 4;
 // FIXME this is suspicious, probably use Option or Result?
 struct Nothing;
 
-pub struct RayCaster {
-    canvas: WindowCanvas,
-}
-
 pub struct RayHit {
     pub height: u32,
     pub tile: Tile,
     pub horizontal: bool,
 }
 
-impl RayCaster {
-    pub fn init(sdl_context: &Sdl) -> RayCaster {
-        let video_subsystem = sdl_context.video().unwrap();
-        let window_2d = video_subsystem
-            .window("", WIDTH_2D, HEIGHT_2D)
-            .position_centered()
-            .build()
-            .unwrap();
-        let mut canvas_2d = window_2d.into_canvas().build().unwrap();
-        canvas_2d.set_draw_color(Color::RGB(0, 255, 255));
-        canvas_2d.clear();
-        canvas_2d.present();
-
-        RayCaster { canvas: canvas_2d }
-    }
-
-    pub fn tick(&mut self, player: &Player, map: &Map) -> Vec<RayHit> {
-        self.canvas.set_draw_color(Color::RGB(64, 64, 64));
-        self.canvas.clear();
-        draw_map(map, &mut self.canvas);
-        let hits = draw_rays(map, &mut self.canvas, player);
-        draw_player(&mut self.canvas, player);
-        self.canvas.present();
-        hits
-    }
-}
-
-fn draw_map<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>) {
-    for y in 0..(MAP_HEIGHT) {
-        for x in 0..(MAP_WIDTH) {
-            //let i = (y * MAP_W + x) as usize;
-            let color = match map.tile_at(x as u8, y as u8) {
-                Tile::Wall(_) => Color::RGB(64, 64, 255),
-                _ => Color::RGB(0, 0, 0),
-            };
-            canvas.set_draw_color(color);
-            canvas
-                .fill_rect(Rect::new(
-                    (MAP_SCALE_W * x as u32 + 1).try_into().unwrap(),
-                    (MAP_SCALE_H * y as u32 + 1).try_into().unwrap(),
-                    MAP_SCALE_W - 1,
-                    MAP_SCALE_H - 1,
-                ))
-                .unwrap();
-        }
-    }
-}
-
-fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &Player) {
-    canvas.set_draw_color(Color::RGB(255, 255, 0));
-    let x = player.x.round() as i32;
-    let y = player.y.round() as i32;
-    let nx = (player.x + player.angle.sin() * PLAYER_LEN).round() as i32;
-    let ny = (player.y + player.angle.cos() * PLAYER_LEN).round() as i32;
-    canvas
-        .fill_rect(Rect::new(
-            x - PLAYER_DIAM,
-            y - PLAYER_DIAM,
-            PLAYER_DIAM as u32 * 2,
-            PLAYER_DIAM as u32 * 2,
-        ))
-        .unwrap();
-    canvas
-        .draw_line(Point::new(x, y), Point::new(nx, ny))
-        .unwrap();
-}
-
-fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player) -> Vec<RayHit> {
+pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
     let height = PIX_HEIGHT;
     let n_rays = PIX_WIDTH;
     let step_angle = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
         let offset = FIELD_OF_VIEW / 2.0 - (i as f64) * step_angle;
-        let ray_h = cast_ray_h(map, canvas, player, offset);
-        let ray_v = cast_ray_v(map, canvas, player, offset);
+        let ray_h = cast_ray_h(map, player, offset);
+        let ray_v = cast_ray_v(map, player, offset);
         let (hit, horiz) = match (ray_h, ray_v) {
             ((_, _, d1, _), (_, _, d2, _)) if d1 <= d2 => (ray_h, false),
             _ => (ray_v, true),
         };
-        draw_ray(canvas, player, hit, Color::WHITE);
         let (_, _, distance, tile) = hit;
         let adj_distance = distance * offset.cos();
         let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
@@ -127,29 +48,8 @@ fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player
     hits
 }
 
-fn draw_ray<T: RenderTarget>(
-    canvas: &mut Canvas<T>,
-    player: &Player,
-    ray: (f64, f64, f64, Tile),
-    color: Color,
-) {
-    let (x, y, _, _) = ray;
-    canvas.set_draw_color(color);
-    canvas
-        .draw_line(
-            Point::new(player.x.round() as i32, player.y.round() as i32),
-            Point::new(x as i32, y as i32),
-        )
-        .unwrap();
-}
-
 //canvas parameter left here to facilitate debug drawings
-fn cast_ray_v<T: RenderTarget>(
-    map: &Map,
-    _canvas: &mut Canvas<T>,
-    player: &Player,
-    ray_offset: f64,
-) -> (f64, f64, f64, Tile) {
+fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, Tile) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
@@ -178,12 +78,7 @@ fn cast_ray_v<T: RenderTarget>(
     follow_ray(map, player, rx, ry, xo, yo)
 }
 
-fn cast_ray_h<T: RenderTarget>(
-    map: &Map,
-    _canvas: &mut Canvas<T>,
-    player: &Player,
-    ray_offset: f64,
-) -> (f64, f64, f64, Tile) {
+fn cast_ray_h(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, Tile) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
