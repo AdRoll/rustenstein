@@ -25,6 +25,7 @@ mod player;
 mod ray_caster;
 
 use crate::ray_caster::RayHit;
+use constants::*;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
 const VGA_CEILING_COLORS: [usize; 60] = [
@@ -34,12 +35,6 @@ const VGA_CEILING_COLORS: [usize; 60] = [
     0x1d, 0x2d, 0x1d, 0x1d, 0x1d, 0x1d, 0xdd, 0xdd, 0x7d, 0xdd, 0xdd, 0xdd,
 ];
 
-const BASE_WIDTH: u32 = 320;
-const BASE_HEIGHT: u32 = 200;
-const STATUS_LINES: u32 = 40;
-const PIX_WIDTH: u32 = BASE_WIDTH;
-const PIX_HEIGHT: u32 = BASE_HEIGHT - STATUS_LINES;
-const PIX_CENTER: u32 = PIX_HEIGHT / 2;
 const DARKNESS: f64 = 0.75;
 
 /// Run Wolfenstein 3D
@@ -99,7 +94,7 @@ pub fn main() {
     let map = game.cache.get_map(game.episode, game.level);
     let mut player = map.find_player();
 
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context, PIX_WIDTH, PIX_HEIGHT);
+    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context);
 
     let width = BASE_WIDTH * args.scale;
     let height = BASE_HEIGHT * args.scale;
