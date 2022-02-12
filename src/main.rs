@@ -8,8 +8,8 @@ use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::render::{RenderTarget, Texture, Canvas};
-use sdl2::video::{WindowContext, Window};
+use sdl2::render::{Canvas, RenderTarget, Texture};
+use sdl2::video::{Window, WindowContext};
 use sdl2::EventPump;
 use std::time::Duration;
 use std::time::Instant;
@@ -65,10 +65,10 @@ struct Video<'a> {
     pub scale_factor: u32,
     pub color_map: ColorMap,
     pub texture: Texture<'a>,
-    pub canvas: Canvas<Window>
+    pub canvas: Canvas<Window>,
 }
 
-impl Video <'_> {
+impl Video<'_> {
     pub fn present(&mut self) {
         self.canvas.copy(&self.texture, None, None).unwrap();
         self.canvas.present();
@@ -125,73 +125,16 @@ pub fn main() {
             .unwrap(),
     };
 
-    // TODO show title
-    let titlepic = game.cache.get_pic(cache::TITLEPIC);
-    video
-        .texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            draw_to_texture(buffer, pitch, 0, 0, titlepic, video.color_map);
-        })
-        .unwrap_or_default();
-
-    video.present();
-
+    show_title(&game, &mut video);
     wait_for_key(&mut event_pump);
 
-    'main_loop: loop {
-        match process_input(&mut event_pump, &mut player) {
-            Ok(hits) => hits,
-            Err(_) => {
-                break 'main_loop;
-            }
-        };
-
+    while process_input(&mut event_pump, &mut player).is_ok() {
         let ray_hits = ray_caster.tick(&player, map);
 
-        // FIXME is this really necessary or can it be handled by sdl
+        // FIXME is this really necessary or can it be handled by sdl?
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
-        // TODO convert this to draw world (pass ray hits)
-        video
-            .texture
-            .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                // draw floor and ceiling colors
-                let floor = video.color_map[VGA_FLOOR_COLOR];
-                let ceiling = video.color_map[VGA_CEILING_COLORS[game.level]];
-                let vm = video.view_height / video.scale_factor / 2;
-
-                for x in 0..PIX_WIDTH {
-                    for y in 0..PIX_HEIGHT / 2 {
-                        let ceilings = darken_color(ceiling, vm - y, PIX_CENTER);
-                        put_pixel(buffer, pitch, x, y, ceilings);
-                    }
-                    for y in PIX_HEIGHT / 2..PIX_HEIGHT {
-                        let floors = darken_color(floor, y - vm, PIX_CENTER);
-                        put_pixel(buffer, pitch, x, y, floors);
-                    }
-                }
-
-                for x in 0..PIX_WIDTH {
-                    let mut color = if ray_hits[x as usize].horizontal {
-                        video.color_map[150]
-                    } else {
-                        video.color_map[155]
-                    };
-                    let current = match ray_hits[x as usize].height {
-                        rh if rh > PIX_CENTER => PIX_CENTER,
-                        rh => rh,
-                    };
-
-                    // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                    color = darken_color(color, current, PIX_CENTER);
-
-                    for y in PIX_CENTER - current..PIX_CENTER + current {
-                        put_pixel(buffer, pitch, x, y, color);
-                    }
-                }
-            })
-            .unwrap();
-
+        draw_world(&game, &mut video, &ray_hits);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
 
@@ -241,6 +184,60 @@ fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Res
     }
 
     Ok(())
+}
+
+fn show_title(game: &Game, video: &mut Video) {
+    let titlepic = game.cache.get_pic(cache::TITLEPIC);
+    video
+        .texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            draw_to_texture(buffer, pitch, 0, 0, titlepic, video.color_map);
+        })
+        .unwrap_or_default();
+
+    video.present();
+}
+
+fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
+    video
+        .texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            // draw floor and ceiling colors
+            let floor = video.color_map[VGA_FLOOR_COLOR];
+            let ceiling = video.color_map[VGA_CEILING_COLORS[game.level]];
+            let vm = video.view_height / video.scale_factor / 2;
+
+            for x in 0..PIX_WIDTH {
+                for y in 0..PIX_HEIGHT / 2 {
+                    let ceilings = darken_color(ceiling, vm - y, PIX_CENTER);
+                    put_pixel(buffer, pitch, x, y, ceilings);
+                }
+                for y in PIX_HEIGHT / 2..PIX_HEIGHT {
+                    let floors = darken_color(floor, y - vm, PIX_CENTER);
+                    put_pixel(buffer, pitch, x, y, floors);
+                }
+            }
+
+            for x in 0..PIX_WIDTH {
+                let mut color = if ray_hits[x as usize].horizontal {
+                    video.color_map[150]
+                } else {
+                    video.color_map[155]
+                };
+                let current = match ray_hits[x as usize].height {
+                    rh if rh > PIX_CENTER => PIX_CENTER,
+                    rh => rh,
+                };
+
+                // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                color = darken_color(color, current, PIX_CENTER);
+
+                for y in PIX_CENTER - current..PIX_CENTER + current {
+                    put_pixel(buffer, pitch, x, y, color);
+                }
+            }
+        })
+        .unwrap();
 }
 
 fn draw_weapon(game: &Game, video: &mut Video) {
