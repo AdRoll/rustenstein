@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use clap::Parser;
 
-use minifb::{Key, KeyRepeat, ScaleMode, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
@@ -92,18 +92,10 @@ pub fn main() {
 
     let buffer: Vec<u32> = vec![0; (BASE_WIDTH * BASE_HEIGHT) as usize];
 
-    let mut window = Window::new(
-        "rustenstein 3D",
-        width,
-        height,
-        WindowOptions {
-            scale_mode: ScaleMode::Stretch,
-            ..WindowOptions::default()
-        },
-    )
-    .unwrap_or_else(|e| {
-        panic!("{}", e);
-    });
+    let mut window = Window::new("rustenstein 3D", width, height, WindowOptions::default())
+        .unwrap_or_else(|e| {
+            panic!("{}", e);
+        });
 
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
