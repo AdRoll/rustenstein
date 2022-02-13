@@ -26,10 +26,12 @@ pub struct RayHit {
 pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
     let height = PIX_HEIGHT;
     let n_rays = PIX_WIDTH;
-    let step_angle = FIELD_OF_VIEW / (n_rays as f64);
+    let fov_delta = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
-        let offset = FIELD_OF_VIEW / 2.0 - (i as f64) * step_angle;
+        let fov_angle = fov_delta * (i as f64);
+        // transformation from cylindrical screen to flat screen (prevents fisheye effect)
+        let offset = (FIELD_OF_VIEW / 2.0 - fov_angle).atan();
         let ray_h = cast_ray_h(map, player, offset);
         let ray_v = cast_ray_v(map, player, offset);
         let (hit, horiz) = match (ray_h, ray_v) {
@@ -37,6 +39,7 @@ pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
             _ => (ray_v, true),
         };
         let (_, _, distance, tile) = hit;
+
         let adj_distance = distance * offset.cos();
         let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
         hits.push(RayHit {
