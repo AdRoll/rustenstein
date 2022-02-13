@@ -124,7 +124,7 @@ fn draw_rays<T: RenderTarget>(
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
         let fov_angle = fov_delta * (i as f64);
-        // transformation from cylindrical screen to flat screen
+        // transformation from cylindrical screen to flat screen (prevents fisheye effect)
         let offset = (FIELD_OF_VIEW / 2.0 - fov_angle).atan();
 
         let ray_h = cast_ray_h(map, canvas, player, offset);
