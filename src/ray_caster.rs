@@ -104,10 +104,13 @@ fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &Player) {
 fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player) -> Vec<RayHit> {
     let height = PIX_HEIGHT;
     let n_rays = PIX_WIDTH;
-    let step_angle = FIELD_OF_VIEW / (n_rays as f64);
+    let fov_delta = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
-        let offset = FIELD_OF_VIEW / 2.0 - (i as f64) * step_angle;
+        let fov_angle = fov_delta * (i as f64);
+        // transformation from cylindrical screen to flat screen (prevents fisheye effect)
+        let offset = (FIELD_OF_VIEW / 2.0 - fov_angle).atan();
+
         let ray_h = cast_ray_h(map, canvas, player, offset);
         let ray_v = cast_ray_v(map, canvas, player, offset);
         let (hit, horiz) = match (ray_h, ray_v) {
@@ -116,6 +119,7 @@ fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player
         };
         draw_ray(canvas, player, hit, Color::WHITE);
         let (_, _, distance, tile) = hit;
+
         let adj_distance = distance * offset.cos();
         let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
         hits.push(RayHit {
