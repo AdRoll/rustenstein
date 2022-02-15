@@ -26,8 +26,6 @@ struct Nothing;
 
 pub struct RayCaster {
     canvas: WindowCanvas,
-    view3d_width: u32,
-    view3d_height: u32,
 }
 
 pub struct RayHit {
@@ -37,7 +35,7 @@ pub struct RayHit {
 }
 
 impl RayCaster {
-    pub fn init(sdl_context: &Sdl, view3d_width: u32, view3d_height: u32) -> RayCaster {
+    pub fn init(sdl_context: &Sdl) -> RayCaster {
         let video_subsystem = sdl_context.video().unwrap();
         let window_2d = video_subsystem
             .window("", WIDTH_2D, HEIGHT_2D)
@@ -49,24 +47,14 @@ impl RayCaster {
         canvas_2d.clear();
         canvas_2d.present();
 
-        RayCaster {
-            canvas: canvas_2d,
-            view3d_width,
-            view3d_height,
-        }
+        RayCaster { canvas: canvas_2d }
     }
 
     pub fn tick(&mut self, player: &Player, map: &Map) -> Vec<RayHit> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
         draw_map(map, &mut self.canvas);
-        let hits = draw_rays(
-            map,
-            &mut self.canvas,
-            player,
-            self.view3d_height,
-            self.view3d_width,
-        );
+        let hits = draw_rays(map, &mut self.canvas, player);
         draw_player(&mut self.canvas, player);
         self.canvas.present();
         hits
@@ -113,13 +101,9 @@ fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &Player) {
         .unwrap();
 }
 
-fn draw_rays<T: RenderTarget>(
-    map: &Map,
-    canvas: &mut Canvas<T>,
-    player: &Player,
-    height: u32,
-    n_rays: u32,
-) -> Vec<RayHit> {
+fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player) -> Vec<RayHit> {
+    let height = PIX_HEIGHT;
+    let n_rays = PIX_WIDTH;
     let fov_delta = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
