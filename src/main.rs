@@ -216,7 +216,7 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
             for x in 0..PIX_WIDTH {
                 let hit = &ray_hits[x as usize];
                 // FIXME the selected tiles don't seem to match
-                let texture = game.cache.get_texture(hit.tile as usize+6);
+                let texture = game.cache.get_texture(hit.tile as usize+8);
 
                 let current = match ray_hits[x as usize].height {
                     rh if rh > PIX_CENTER => PIX_CENTER,
