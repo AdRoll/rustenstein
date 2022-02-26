@@ -30,7 +30,7 @@ pub struct RayCaster {
 
 pub struct RayHit {
     pub height: u32,
-    pub tile: Tile,
+    pub tile: u16,
     pub horizontal: bool,
 }
 
@@ -134,7 +134,7 @@ fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player
 fn draw_ray<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     player: &Player,
-    ray: (f64, f64, f64, Tile),
+    ray: (f64, f64, f64, u16),
     color: Color,
 ) {
     let (x, y, _, _) = ray;
@@ -153,12 +153,12 @@ fn cast_ray_v<T: RenderTarget>(
     _canvas: &mut Canvas<T>,
     player: &Player,
     ray_offset: f64,
-) -> (f64, f64, f64, Tile) {
+) -> (f64, f64, f64, u16) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
     if ray_angle == ANGLE_LEFT || ray_angle == ANGLE_RIGHT {
-        return (0.0, 0.0, f64::INFINITY, Tile::Floor);
+        return (0.0, 0.0, f64::INFINITY, 0);
     }
 
     let (rx, ry, xo, yo) = if !(ANGLE_RIGHT..=ANGLE_LEFT).contains(&ray_angle) {
@@ -187,12 +187,12 @@ fn cast_ray_h<T: RenderTarget>(
     _canvas: &mut Canvas<T>,
     player: &Player,
     ray_offset: f64,
-) -> (f64, f64, f64, Tile) {
+) -> (f64, f64, f64, u16) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
     if ray_angle == ANGLE_UP || ray_angle == ANGLE_DOWN {
-        return (0.0, 0.0, f64::INFINITY, Tile::Floor);
+        return (0.0, 0.0, f64::INFINITY, 0);
     }
 
     let (rx, ry, xo, yo) = if ray_angle < ANGLE_UP {
@@ -224,15 +224,15 @@ fn follow_ray(
     y: f64,
     xo: f64,
     yo: f64,
-) -> (f64, f64, f64, Tile) {
+) -> (f64, f64, f64, u16) {
     let (mut rx, mut ry) = (x, y);
     for _ in 1..MAP_HEIGHT {
         match read_map(map, rx, ry) {
-            Ok(tile @ Tile::Wall(_)) => {
+            Ok(Tile::Wall(tile)) => {
                 return (rx, ry, distance(player, rx, ry), tile);
             }
             Err(_) => {
-                return (rx, ry, distance(player, rx, ry), Tile::Floor);
+                return (rx, ry, distance(player, rx, ry), 0);
             }
             _ => {}
         }
@@ -240,7 +240,7 @@ fn follow_ray(
         ry += yo;
     }
 
-    (rx, ry, distance(player, rx, ry), Tile::Floor)
+    (rx, ry, distance(player, rx, ry), 0)
 }
 
 fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
