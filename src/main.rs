@@ -214,21 +214,27 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
             }
 
             for x in 0..PIX_WIDTH {
-                let mut color = if ray_hits[x as usize].horizontal {
-                    video.color_map[150]
-                } else {
-                    video.color_map[155]
-                };
+                let hit = &ray_hits[x as usize];
+                // FIXME the selected tiles don't seem to match
+                let texture = game.cache.get_texture(hit.tile as usize+6);
+
                 let current = match ray_hits[x as usize].height {
                     rh if rh > PIX_CENTER => PIX_CENTER,
                     rh => rh,
                 };
-
-                // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                color = darken_color(color, current, PIX_CENTER);
-
+                let xoff = (x % 64) * 64;
+                let step = 32.0 / ray_hits[x as usize].height as f64;
+                let mut ytex = 0.0;
                 for y in PIX_CENTER - current..PIX_CENTER + current {
+                    let source = ytex as u32 + xoff;
+                    let color_index = texture[source as usize] as usize;
+                    let mut color = video.color_map[color_index];
+
+                    // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                    color = darken_color(color, current, PIX_CENTER);
+
                     put_pixel(buffer, pitch, x, y, color);
+                    ytex += step;
                 }
             }
         })
