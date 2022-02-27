@@ -32,6 +32,7 @@ pub struct RayHit {
     pub height: u32,
     pub tile: u16,
     pub horizontal: bool,
+    pub tex_x: usize,
 }
 
 impl RayCaster {
@@ -122,10 +123,12 @@ fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player
 
         let adj_distance = distance * offset.cos();
         let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
+        let tex_x = ray_to_tex_coordinatinates(hit.0, hit.1, horiz);
         hits.push(RayHit {
             height: min(height, ray_height as u32),
             tile,
             horizontal: horiz,
+            tex_x,
         });
     }
     hits
@@ -246,11 +249,25 @@ fn follow_ray(
 fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
     let mx = cdiv(x, MAP_SCALE_W, 0.0);
     let my = cdiv(y, MAP_SCALE_H, 0.0);
-    if mx >= MAP_WIDTH as usize || my >= MAP_HEIGHT as usize {
+    if mx >= MAP_WIDTH || my >= MAP_HEIGHT {
         Err(Nothing)
     } else {
         Ok(map.tile_at(mx as u8, my as u8))
     }
+}
+
+/// Turn the ray hit (x, y) coordinates in to the x-coordinate within the texture.
+/// This is obtained by translating the coords first to the tilemap dimensions,
+/// and, since each integer represents a tile, the fractional part determines what
+/// part of the texture the ray hit.
+// TODO consider moving this over to the drawing routine instead
+fn ray_to_tex_coordinatinates(rx: f64, ry: f64, horizontal: bool) -> usize {
+    let fract = if horizontal {
+        (rx / MAP_SCALE_W as f64).fract()
+    } else {
+        (ry / MAP_SCALE_H as f64).fract()
+    };
+    (fract * WALLPIC_WIDTH as f64) as usize
 }
 
 fn cdiv(x: f64, scale: u32, updown: f64) -> usize {

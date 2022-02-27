@@ -230,17 +230,19 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
                     rh => rh,
                 };
 
-                // FIXME iterating through the texture x coords for now,
-                // until we add texture intercept logic to the ray caster
-                let xoff = (x % WALLPIC_WIDTH as u32) * WALLPIC_WIDTH as u32;
+                // tex_x is where the ray hit within the texture, indicates which part
+                // of the texture should be displayed for this given pixel column
+                // Need to multiply for width to get the correct row in the matrix
+                // for this column
+                let xoff = hit.tex_x * WALLPIC_WIDTH;
 
                 // TODO review this scaling logic, it may not be accurate enough
                 let step = WALLPIC_WIDTH as f64 / 2.0 / ray_hits[x as usize].height as f64;
                 let mut ytex = 0.0;
 
                 for y in PIX_CENTER - current..PIX_CENTER + current {
-                    let source = ytex as u32 + xoff;
-                    let color_index = texture[source as usize] as usize;
+                    let source = ytex as usize + xoff;
+                    let color_index = texture[source] as usize;
                     let mut color = video.color_map[color_index];
 
                     // divide the color by a factor of the height to get a gradient shadow effect based on distance
