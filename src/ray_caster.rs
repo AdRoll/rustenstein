@@ -19,8 +19,9 @@ struct Nothing;
 
 pub struct RayHit {
     pub height: u32,
-    pub tile: Tile,
+    pub tile: u16,
     pub horizontal: bool,
+    pub tex_x: usize,
 }
 
 pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
@@ -42,22 +43,24 @@ pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
 
         let adj_distance = distance * offset.cos();
         let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
+        let tex_x = ray_to_tex_coordinatinates(hit.0, hit.1, horiz);
         hits.push(RayHit {
             height: min(height, ray_height as u32),
             tile,
             horizontal: horiz,
+            tex_x,
         });
     }
     hits
 }
 
 //canvas parameter left here to facilitate debug drawings
-fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, Tile) {
+fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u16) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
     if ray_angle == ANGLE_LEFT || ray_angle == ANGLE_RIGHT {
-        return (0.0, 0.0, f64::INFINITY, Tile::Floor);
+        return (0.0, 0.0, f64::INFINITY, 0);
     }
 
     let (rx, ry, xo, yo) = if !(ANGLE_RIGHT..=ANGLE_LEFT).contains(&ray_angle) {
@@ -81,12 +84,12 @@ fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, Ti
     follow_ray(map, player, rx, ry, xo, yo)
 }
 
-fn cast_ray_h(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, Tile) {
+fn cast_ray_h(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u16) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
     if ray_angle == ANGLE_UP || ray_angle == ANGLE_DOWN {
-        return (0.0, 0.0, f64::INFINITY, Tile::Floor);
+        return (0.0, 0.0, f64::INFINITY, 0);
     }
 
     let (rx, ry, xo, yo) = if ray_angle < ANGLE_UP {
@@ -118,15 +121,15 @@ fn follow_ray(
     y: f64,
     xo: f64,
     yo: f64,
-) -> (f64, f64, f64, Tile) {
+) -> (f64, f64, f64, u16) {
     let (mut rx, mut ry) = (x, y);
     for _ in 1..MAP_HEIGHT {
         match read_map(map, rx, ry) {
-            Ok(tile @ Tile::Wall(_)) => {
+            Ok(Tile::Wall(tile)) => {
                 return (rx, ry, distance(player, rx, ry), tile);
             }
             Err(_) => {
-                return (rx, ry, distance(player, rx, ry), Tile::Floor);
+                return (rx, ry, distance(player, rx, ry), 0);
             }
             _ => {}
         }
@@ -134,17 +137,31 @@ fn follow_ray(
         ry += yo;
     }
 
-    (rx, ry, distance(player, rx, ry), Tile::Floor)
+    (rx, ry, distance(player, rx, ry), 0)
 }
 
 fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
     let mx = cdiv(x, MAP_SCALE_W, 0.0);
     let my = cdiv(y, MAP_SCALE_H, 0.0);
-    if mx >= MAP_WIDTH as usize || my >= MAP_HEIGHT as usize {
+    if mx >= MAP_WIDTH || my >= MAP_HEIGHT {
         Err(Nothing)
     } else {
         Ok(map.tile_at(mx as u8, my as u8))
     }
+}
+
+/// Turn the ray hit (x, y) coordinates in to the x-coordinate within the texture.
+/// This is obtained by translating the coords first to the tilemap dimensions,
+/// and, since each integer represents a tile, the fractional part determines what
+/// part of the texture the ray hit.
+// TODO consider moving this over to the drawing routine instead
+fn ray_to_tex_coordinatinates(rx: f64, ry: f64, horizontal: bool) -> usize {
+    let fract = if horizontal {
+        (rx / MAP_SCALE_W as f64).fract()
+    } else {
+        (ry / MAP_SCALE_H as f64).fract()
+    };
+    (fract * WALLPIC_WIDTH as f64) as usize
 }
 
 fn cdiv(x: f64, scale: u32, updown: f64) -> usize {

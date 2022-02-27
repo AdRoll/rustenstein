@@ -171,23 +171,43 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
             put_pixel(&mut video.buffer, x, y, floors);
         }
     }
-
     for x in 0..PIX_WIDTH {
-        let mut color = if ray_hits[x as usize].horizontal {
-            video.color_map[150]
+        let hit = &ray_hits[x as usize];
+
+        // convert tile number to wall pic
+        // accept-the-mystery
+        let wallpic = if hit.horizontal {
+            (hit.tile - 1) * 2
         } else {
-            video.color_map[155]
+            (hit.tile - 1) * 2 + 1
         };
+        let texture = game.cache.get_texture(wallpic as usize);
+
         let current = match ray_hits[x as usize].height {
             rh if rh > PIX_CENTER => PIX_CENTER,
             rh => rh,
         };
 
-        // divide the color by a factor of the height to get a gradient shadow effect based on distance
-        color = darken_color(color, current, PIX_CENTER);
+        // tex_x is where the ray hit within the texture, indicates which part
+        // of the texture should be displayed for this given pixel column
+        // Need to multiply for width to get the correct row in the matrix
+        // for this column
+        let xoff = hit.tex_x * WALLPIC_WIDTH;
+
+        // TODO review this scaling logic, it may not be accurate enough
+        let step = WALLPIC_WIDTH as f64 / 2.0 / ray_hits[x as usize].height as f64;
+        let mut ytex = 0.0;
 
         for y in PIX_CENTER - current..PIX_CENTER + current {
+            let source = ytex as usize + xoff;
+            let color_index = texture[source] as usize;
+            let mut color = video.color_map[color_index];
+
+            // divide the color by a factor of the height to get a gradient shadow effect based on distance
+            color = darken_color(color, current, PIX_CENTER);
+
             put_pixel(&mut video.buffer, x, y, color);
+            ytex += step;
         }
     }
 }
