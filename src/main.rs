@@ -215,16 +215,25 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
 
             for x in 0..PIX_WIDTH {
                 let hit = &ray_hits[x as usize];
+
                 // FIXME the selected tiles don't seem to match
+                // there must be some missing step to convert from wall tile number
+                // to texture number
                 let texture = game.cache.get_texture(hit.tile as usize+8);
 
                 let current = match ray_hits[x as usize].height {
                     rh if rh > PIX_CENTER => PIX_CENTER,
                     rh => rh,
                 };
+
+                // FIXME iterating through the texture x coords for now,
+                // until we add texture intercept logic to the ray caster
                 let xoff = (x % 64) * 64;
+
+                // TODO review this scaling logic, it may not be accurate enough
                 let step = 32.0 / ray_hits[x as usize].height as f64;
                 let mut ytex = 0.0;
+
                 for y in PIX_CENTER - current..PIX_CENTER + current {
                     let source = ytex as u32 + xoff;
                     let color_index = texture[source as usize] as usize;
