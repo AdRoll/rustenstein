@@ -219,7 +219,7 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
                 // FIXME the selected tiles don't seem to match
                 // there must be some missing step to convert from wall tile number
                 // to texture number
-                let texture = game.cache.get_texture(hit.tile as usize+8);
+                let texture = game.cache.get_texture(hit.tile as usize + 8);
 
                 let current = match ray_hits[x as usize].height {
                     rh if rh > PIX_CENTER => PIX_CENTER,
