@@ -228,10 +228,10 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
 
                 // FIXME iterating through the texture x coords for now,
                 // until we add texture intercept logic to the ray caster
-                let xoff = (x % 64) * 64;
+                let xoff = (x % WALLPIC_WIDTH as u32) * WALLPIC_WIDTH as u32;
 
                 // TODO review this scaling logic, it may not be accurate enough
-                let step = 32.0 / ray_hits[x as usize].height as f64;
+                let step = WALLPIC_WIDTH as f64 / 2.0 / ray_hits[x as usize].height as f64;
                 let mut ytex = 0.0;
 
                 for y in PIX_CENTER - current..PIX_CENTER + current {
