@@ -127,7 +127,7 @@ pub fn main() {
         let ray_hits = ray_caster.tick(&player, map);
 
         // FIXME is this really necessary or can it be handled by sdl?
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        ::std::thread::sleep(Duration::new(0, 500_000_000u32 / 60));
 
         draw_world(&game, &mut video, &ray_hits);
         draw_weapon(&game, &mut video);
