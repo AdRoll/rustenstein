@@ -225,10 +225,7 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
                 };
                 let texture = game.cache.get_texture(wallpic as usize);
 
-                let current = match ray_hits[x as usize].height {
-                    rh if rh > PIX_CENTER => PIX_CENTER,
-                    rh => rh,
-                };
+                let current = ray_hits[x as usize].height as i32;
 
                 // tex_x is where the ray hit within the texture, indicates which part
                 // of the texture should be displayed for this given pixel column
@@ -236,19 +233,21 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
                 // for this column
                 let xoff = hit.tex_x * WALLPIC_WIDTH;
 
-                // TODO review this scaling logic, it may not be accurate enough
-                let step = WALLPIC_WIDTH as f64 / 2.0 / ray_hits[x as usize].height as f64;
+                let step = WALLPIC_WIDTH as f64 / 2.0 / current as f64;
                 let mut ytex = 0.0;
 
-                for y in PIX_CENTER - current..PIX_CENTER + current {
-                    let source = ytex as usize + xoff;
-                    let color_index = texture[source] as usize;
-                    let mut color = video.color_map[color_index];
+                for y in PIX_CENTER as i32 - current..PIX_CENTER as i32 + current {
+                    if y >= 0 && y <= PIX_HEIGHT as i32 {
+                        let source = ytex as usize + xoff;
+                        let color_index = texture[source] as usize;
+                        let mut color = video.color_map[color_index];
 
-                    // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                    color = darken_color(color, current, PIX_CENTER);
+                        // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                        color = darken_color(color, current as u32, PIX_CENTER);
 
-                    put_pixel(buffer, pitch, x, y, color);
+                        put_pixel(buffer, pitch, x, y as u32, color);
+                    }
+
                     ytex += step;
                 }
             }
@@ -293,7 +292,7 @@ fn draw_status(game: &Game, video: &mut Video) {
 
 fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
     let (r, g, b) = color;
-    let factor = lightness as f64 / max as f64 / DARKNESS;
+    let factor = std::cmp::min(lightness, max) as f64 / max as f64 / DARKNESS;
     let rs = (r as f64 * factor) as u8;
     let gs = (g as f64 * factor) as u8;
     let bs = (b as f64 * factor) as u8;
