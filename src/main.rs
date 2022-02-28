@@ -56,7 +56,9 @@ struct Opts {
 struct Video<'a> {
     pub width: u32,
     pub height: u32,
-    pub view_height: u32,
+    pub pix_width: u32,
+    pub pix_height: u32,
+    pub pix_center: u32,
     pub scale_factor: u32,
     pub color_map: ColorMap,
     pub texture: Texture<'a>,
@@ -98,6 +100,7 @@ pub fn main() {
 
     let width = BASE_WIDTH * args.scale;
     let height = BASE_HEIGHT * args.scale;
+
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
         .window("rustenstein 3D", width, height)
@@ -108,15 +111,21 @@ pub fn main() {
     let canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
 
+    let pix_width = width;
+    let pix_height = height - STATUS_LINES * args.scale;
+    let pix_center = pix_height / 2;
+
     let mut video = Video {
         scale_factor: args.scale,
         width,
         height,
-        view_height: PIX_HEIGHT * args.scale,
+        pix_width,
+        pix_height,
+        pix_center,
         color_map: build_color_map(),
         canvas,
         texture: texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, BASE_WIDTH, BASE_HEIGHT)
+            .create_texture_streaming(PixelFormatEnum::RGB24, width, height)
             .unwrap(),
     };
 
@@ -124,7 +133,7 @@ pub fn main() {
     wait_for_key(&mut event_pump);
 
     while process_input(&mut event_pump, &mut player).is_ok() {
-        let ray_hits = ray_caster.tick(&player, map);
+        let ray_hits = ray_caster.tick(pix_width, pix_height, &player, map);
 
         // FIXME is this really necessary or can it be handled by sdl?
         ::std::thread::sleep(Duration::new(0, 500_000_000u32 / 60));
@@ -200,20 +209,19 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
             // draw floor and ceiling colors
             let floor = video.color_map[VGA_FLOOR_COLOR];
             let ceiling = video.color_map[VGA_CEILING_COLORS[game.level]];
-            let vm = video.view_height / video.scale_factor / 2;
 
-            for x in 0..PIX_WIDTH {
-                for y in 0..PIX_HEIGHT / 2 {
-                    let ceilings = darken_color(ceiling, vm - y, PIX_CENTER);
+            for x in 0..video.pix_width {
+                for y in 0..video.pix_height / 2 {
+                    let ceilings = darken_color(ceiling, video.pix_center - y, video.pix_center);
                     put_pixel(buffer, pitch, x, y, ceilings);
                 }
-                for y in PIX_HEIGHT / 2..PIX_HEIGHT {
-                    let floors = darken_color(floor, y - vm, PIX_CENTER);
+                for y in video.pix_height / 2..video.pix_height {
+                    let floors = darken_color(floor, y - video.pix_center, video.pix_center);
                     put_pixel(buffer, pitch, x, y, floors);
                 }
             }
 
-            for x in 0..PIX_WIDTH {
+            for x in 0..video.pix_width {
                 let hit = &ray_hits[x as usize];
 
                 // convert tile number to wall pic
@@ -236,14 +244,14 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
                 let step = WALLPIC_WIDTH as f64 / 2.0 / current as f64;
                 let mut ytex = 0.0;
 
-                for y in PIX_CENTER as i32 - current..PIX_CENTER as i32 + current {
-                    if y >= 0 && y <= PIX_HEIGHT as i32 {
+                for y in video.pix_center as i32 - current..video.pix_center as i32 + current {
+                    if y >= 0 && y <= video.pix_height as i32 {
                         let source = ytex as usize + xoff;
                         let color_index = texture[source] as usize;
                         let mut color = video.color_map[color_index];
 
                         // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                        color = darken_color(color, current as u32, PIX_CENTER);
+                        color = darken_color(color, current as u32, video.pix_center);
 
                         put_pixel(buffer, pitch, x, y as u32, color);
                     }
@@ -274,7 +282,14 @@ fn draw_status(game: &Game, video: &mut Video) {
     video
         .texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            draw_to_texture(buffer, pitch, 0, PIX_HEIGHT, statuspic, video.color_map);
+            draw_to_texture(
+                buffer,
+                pitch,
+                0,
+                video.pix_height,
+                statuspic,
+                video.color_map,
+            );
 
             let facepic = match game.start_time.elapsed().as_secs() % 3 {
                 0 => game.cache.get_pic(cache::FACE1APIC),
@@ -283,8 +298,8 @@ fn draw_status(game: &Game, video: &mut Video) {
                 _ => unreachable!(),
             };
 
-            let shift_x = BASE_WIDTH / 2 - facepic.width;
-            let shift_y = PIX_HEIGHT + facepic.height / 8;
+            let shift_x = video.pix_width / 2 - facepic.width * video.scale_factor;
+            let shift_y = video.pix_height + facepic.height * video.scale_factor / 8;
             draw_to_texture(buffer, pitch, shift_x, shift_y, facepic, video.color_map);
         })
         .unwrap_or_default();
@@ -313,13 +328,13 @@ fn simple_scale_shape(
         .texture
         .with_lock(None, |vbuf: &mut [u8], pitch: usize| {
             let sprite_scale_factor = 2;
-            let xcenter = PIX_WIDTH / 2;
-            let height = PIX_HEIGHT + 1;
+            let xcenter = video.pix_width / 2;
+            let height = video.pix_height + 1;
 
             let scale = height >> 1;
             let pixheight = scale * sprite_scale_factor;
             let actx = xcenter - scale;
-            let upperedge = PIX_HEIGHT / 2 - scale;
+            let upperedge = video.pix_height / 2 - scale;
             // cmdptr=(word *) shape->dataofs;
             // cmdptr = iter(shape.dataofs)
             let mut cmdptr = dataofs.iter();
@@ -330,7 +345,7 @@ fn simple_scale_shape(
 
             while i <= right_pix {
                 let mut lpix = rpix;
-                if lpix >= PIX_WIDTH {
+                if lpix >= video.pix_width {
                     break;
                 }
 
@@ -338,8 +353,8 @@ fn simple_scale_shape(
                 rpix = (pixcnt >> 6) + actx;
 
                 if lpix != rpix && rpix > 0 {
-                    if rpix > PIX_WIDTH {
-                        rpix = PIX_WIDTH;
+                    if rpix > video.pix_width {
+                        rpix = video.pix_width;
                         i = right_pix + 1;
                     }
                     let read_word = |line: &mut Iter<u8>| {
@@ -381,8 +396,8 @@ fn simple_scale_shape(
                                     if scrstarty < 0 {
                                         scrstarty = 0;
                                     }
-                                    if screndy > PIX_HEIGHT as i32 {
-                                        screndy = PIX_HEIGHT as i32;
+                                    if screndy > video.pix_height as i32 {
+                                        screndy = video.pix_height as i32;
                                         j = endy;
                                     }
 
@@ -418,19 +433,28 @@ fn draw_to_texture(
     color_map: ColorMap,
 ) {
     // different from the window size
+    let mut scj = 0;
     for y in 0..pic.height {
+        let mut sci = 0;
         for x in 0..pic.width {
             let source_index =
                 (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
             let color = pic.data[source_index as usize];
-            put_pixel(
-                buffer,
-                pitch,
-                x + shift_x,
-                y + shift_y,
-                color_map[color as usize],
-            );
+            for i in 0..3 {
+                for j in 0..3 {
+                    put_pixel(
+                        buffer,
+                        pitch,
+                        sci + j + shift_x,
+                        scj + i + shift_y,
+                        color_map[color as usize],
+                    );
+                }
+            }
+
+            sci += 3
         }
+        scj += 3
     }
 }
 
