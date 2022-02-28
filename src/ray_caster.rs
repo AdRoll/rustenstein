@@ -51,11 +51,11 @@ impl RayCaster {
         RayCaster { canvas: canvas_2d }
     }
 
-    pub fn tick(&mut self, player: &Player, map: &Map) -> Vec<RayHit> {
+    pub fn tick(&mut self, n_rays: u32, height: u32, player: &Player, map: &Map) -> Vec<RayHit> {
         self.canvas.set_draw_color(Color::RGB(64, 64, 64));
         self.canvas.clear();
         draw_map(map, &mut self.canvas);
-        let hits = draw_rays(map, &mut self.canvas, player);
+        let hits = draw_rays(n_rays, height, map, &mut self.canvas, player);
         draw_player(&mut self.canvas, player);
         self.canvas.present();
         hits
@@ -102,9 +102,13 @@ fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &Player) {
         .unwrap();
 }
 
-fn draw_rays<T: RenderTarget>(map: &Map, canvas: &mut Canvas<T>, player: &Player) -> Vec<RayHit> {
-    let height = PIX_HEIGHT;
-    let n_rays = PIX_WIDTH;
+fn draw_rays<T: RenderTarget>(
+    n_rays: u32,
+    height: u32,
+    map: &Map,
+    canvas: &mut Canvas<T>,
+    player: &Player,
+) -> Vec<RayHit> {
     let fov_delta = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
