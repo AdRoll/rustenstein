@@ -1,7 +1,7 @@
 # Rustenstein 3D
 
-Prototype Wolfenstein 3D port written in Rust. 
-* [Development story](https://tech.nextroll.com/blog/dev/2022/02/02/rustenstein.html) 
+Prototype Wolfenstein 3D port written in Rust.
+* [Development story](https://tech.nextroll.com/blog/dev/2022/02/02/rustenstein.html)
 * [Roadmap](https://github.com/AdRoll/rustenstein/projects/1)
 
 ![Gameplay](./rustenstein.gif)
@@ -16,4 +16,4 @@ The files can be found, for example, [here](https://archive.org/details/Wolfenst
 
 Run the game with:
 
-    cargo run
+    cargo run --release
