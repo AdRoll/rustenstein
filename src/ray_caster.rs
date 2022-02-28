@@ -266,7 +266,11 @@ fn ray_to_tex_coordinatinates(rx: f64, ry: f64, horizontal: bool) -> usize {
     let ty = (ry / MAP_SCALE_H as f64).fract();
 
     let fract = if horizontal {
-        1.0 - tx
+        if ty < 0.5 {
+            1.0 - tx
+        } else {
+            tx
+        }
     } else if tx < 0.5 {
         ty
     } else {
