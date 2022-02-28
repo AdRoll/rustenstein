@@ -127,7 +127,7 @@ pub fn main() {
         let ray_hits = ray_caster.tick(&player, map);
 
         // FIXME is this really necessary or can it be handled by sdl?
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        ::std::thread::sleep(Duration::new(0, 500_000_000u32 / 60));
 
         draw_world(&game, &mut video, &ray_hits);
         draw_weapon(&game, &mut video);
@@ -214,21 +214,41 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
             }
 
             for x in 0..PIX_WIDTH {
-                let mut color = if ray_hits[x as usize].horizontal {
-                    video.color_map[150]
+                let hit = &ray_hits[x as usize];
+
+                // convert tile number to wall pic
+                // accept-the-mystery
+                let wallpic = if hit.horizontal {
+                    (hit.tile - 1) * 2
                 } else {
-                    video.color_map[155]
+                    (hit.tile - 1) * 2 + 1
                 };
-                let current = match ray_hits[x as usize].height {
-                    rh if rh > PIX_CENTER => PIX_CENTER,
-                    rh => rh,
-                };
+                let texture = game.cache.get_texture(wallpic as usize);
 
-                // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                color = darken_color(color, current, PIX_CENTER);
+                let current = ray_hits[x as usize].height as i32;
 
-                for y in PIX_CENTER - current..PIX_CENTER + current {
-                    put_pixel(buffer, pitch, x, y, color);
+                // tex_x is where the ray hit within the texture, indicates which part
+                // of the texture should be displayed for this given pixel column
+                // Need to multiply for width to get the correct row in the matrix
+                // for this column
+                let xoff = hit.tex_x * WALLPIC_WIDTH;
+
+                let step = WALLPIC_WIDTH as f64 / 2.0 / current as f64;
+                let mut ytex = 0.0;
+
+                for y in PIX_CENTER as i32 - current..PIX_CENTER as i32 + current {
+                    if y >= 0 && y <= PIX_HEIGHT as i32 {
+                        let source = ytex as usize + xoff;
+                        let color_index = texture[source] as usize;
+                        let mut color = video.color_map[color_index];
+
+                        // divide the color by a factor of the height to get a gradient shadow effect based on distance
+                        color = darken_color(color, current as u32, PIX_CENTER);
+
+                        put_pixel(buffer, pitch, x, y as u32, color);
+                    }
+
+                    ytex += step;
                 }
             }
         })
@@ -272,7 +292,7 @@ fn draw_status(game: &Game, video: &mut Video) {
 
 fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
     let (r, g, b) = color;
-    let factor = lightness as f64 / max as f64 / DARKNESS;
+    let factor = std::cmp::min(lightness, max) as f64 / max as f64 / DARKNESS;
     let rs = (r as f64 * factor) as u8;
     let gs = (g as f64 * factor) as u8;
     let bs = (b as f64 * factor) as u8;
