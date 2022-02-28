@@ -262,13 +262,17 @@ fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
 /// part of the texture the ray hit.
 // TODO consider moving this over to the drawing routine instead
 fn ray_to_tex_coordinatinates(rx: f64, ry: f64, horizontal: bool) -> usize {
+    let tx = (rx / MAP_SCALE_W as f64).fract();
+    let ty = (ry / MAP_SCALE_H as f64).fract();
+
     let fract = if horizontal {
-        (rx / MAP_SCALE_W as f64).fract()
+        1.0 - tx
+    } else if tx < 0.5 {
+        ty
     } else {
-        (ry / MAP_SCALE_H as f64).fract()
+        1.0 - ty
     };
-    // invert because wall pictures are stored flipped
-    ((1.0 - fract) * WALLPIC_WIDTH as f64) as usize
+    (fract * WALLPIC_WIDTH as f64) as usize
 }
 
 fn cdiv(x: f64, scale: u32, updown: f64) -> usize {
