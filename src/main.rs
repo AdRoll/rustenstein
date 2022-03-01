@@ -124,7 +124,7 @@ fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
 
 fn draw_world(game: &Game, video: &mut Video) {
     // TODO consider passing game as param here
-    let ray_hits =
+    let (ray_hits, _) =
         ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
 
     // draw floor and ceiling

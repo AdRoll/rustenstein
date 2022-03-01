@@ -94,7 +94,7 @@ impl Map {
         }
     }
 
-    pub fn find_player_start(&self) -> (u8, u8, Direction) {
+    fn find_player_start(&self) -> (u8, u8, Direction) {
         for x in 0..MAP_WIDTH as u8 {
             for y in 0..MAP_HEIGHT as u8 {
                 if let Some(Actor::Player(direction)) = self.actor_at(x, y) {

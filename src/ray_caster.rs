@@ -3,6 +3,7 @@ use crate::map::{Map, Tile};
 use crate::player::Player;
 use num::pow;
 use std::cmp::min;
+use std::collections::HashSet;
 use std::f64::consts::PI;
 
 const PLAYER_DIAM: i32 = 6;
@@ -21,20 +22,31 @@ pub struct RayHit {
     pub tex_x: usize,
 }
 
-pub fn draw_rays(n_rays: u32, height: u32, map: &Map, player: &Player) -> Vec<RayHit> {
+pub fn draw_rays(
+    n_rays: u32,
+    height: u32,
+    map: &Map,
+    player: &Player,
+) -> (Vec<RayHit>, HashSet<(usize, usize)>) {
     let fov_delta = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
+    let mut visited_tiles = HashSet::new();
     for i in 0..n_rays {
         let fov_angle = fov_delta * (i as f64);
         // transformation from cylindrical screen to flat screen (prevents fisheye effect)
         let offset = (FIELD_OF_VIEW / 2.0 - fov_angle).atan();
-        let ray_h = cast_ray_h(map, player, offset);
-        let ray_v = cast_ray_v(map, player, offset);
-        let (hit, horiz) = match (ray_h, ray_v) {
-            ((_, _, d1, _), (_, _, d2, _)) if d1 <= d2 => (ray_h, false),
-            _ => (ray_v, true),
+        let mut ray_h = cast_ray_h(map, player, offset);
+        let mut ray_v = cast_ray_v(map, player, offset);
+
+        visited_tiles.extend(ray_h.4.drain());
+        visited_tiles.extend(ray_v.4.drain());
+
+        let (hit, horiz) = if ray_h.2 <= ray_v.2 {
+            (ray_h, false)
+        } else {
+            (ray_v, true)
         };
-        let (_, _, distance, tile) = hit;
+        let (_, _, distance, tile, _) = hit;
 
         let adj_distance = distance * offset.cos();
         let ray_height = TILE_SIZE * n_rays as f64 / adj_distance;
@@ -46,16 +58,20 @@ pub fn draw_rays(n_rays: u32, height: u32, map: &Map, player: &Player) -> Vec<Ra
             tex_x,
         });
     }
-    hits
+    (hits, visited_tiles)
 }
 
 //canvas parameter left here to facilitate debug drawings
-fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u16) {
+fn cast_ray_v(
+    map: &Map,
+    player: &Player,
+    ray_offset: f64,
+) -> (f64, f64, f64, u16, HashSet<(usize, usize)>) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
     if ray_angle == ANGLE_LEFT || ray_angle == ANGLE_RIGHT {
-        return (0.0, 0.0, f64::INFINITY, 0);
+        return (0.0, 0.0, f64::INFINITY, 0, HashSet::new());
     }
 
     let (rx, ry, xo, yo) = if !(ANGLE_RIGHT..=ANGLE_LEFT).contains(&ray_angle) {
@@ -79,12 +95,16 @@ fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u1
     follow_ray(map, player, rx, ry, xo, yo)
 }
 
-fn cast_ray_h(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u16) {
+fn cast_ray_h(
+    map: &Map,
+    player: &Player,
+    ray_offset: f64,
+) -> (f64, f64, f64, u16, HashSet<(usize, usize)>) {
     let ray_angle = norm_angle(player.angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
     if ray_angle == ANGLE_UP || ray_angle == ANGLE_DOWN {
-        return (0.0, 0.0, f64::INFINITY, 0);
+        return (0.0, 0.0, f64::INFINITY, 0, HashSet::new());
     }
 
     let (rx, ry, xo, yo) = if ray_angle < ANGLE_UP {
@@ -116,33 +136,25 @@ fn follow_ray(
     y: f64,
     xo: f64,
     yo: f64,
-) -> (f64, f64, f64, u16) {
+) -> (f64, f64, f64, u16, HashSet<(usize, usize)>) {
     let (mut rx, mut ry) = (x, y);
+    let mut visited = HashSet::new();
     for _ in 1..MAP_HEIGHT {
-        match read_map(map, rx, ry) {
-            Ok(Tile::Wall(tile)) => {
-                return (rx, ry, distance(player, rx, ry), tile);
-            }
-            Err(_) => {
-                return (rx, ry, distance(player, rx, ry), 0);
-            }
-            _ => {}
+        let mx = cdiv(rx, MAP_SCALE_W, 0.0);
+        let my = cdiv(ry, MAP_SCALE_H, 0.0);
+        if mx >= MAP_WIDTH || my >= MAP_HEIGHT {
+            return (rx, ry, distance(player, rx, ry), 0, visited);
+        }
+        visited.insert((mx, my));
+
+        if let Tile::Wall(tile) = map.tile_at(mx as u8, my as u8) {
+            return (rx, ry, distance(player, rx, ry), tile, visited);
         }
         rx += xo;
         ry += yo;
     }
 
-    (rx, ry, distance(player, rx, ry), 0)
-}
-
-fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
-    let mx = cdiv(x, MAP_SCALE_W, 0.0);
-    let my = cdiv(y, MAP_SCALE_H, 0.0);
-    if mx >= MAP_WIDTH || my >= MAP_HEIGHT {
-        Err(Nothing)
-    } else {
-        Ok(map.tile_at(mx as u8, my as u8))
-    }
+    (rx, ry, distance(player, rx, ry), 0, visited)
 }
 
 /// Turn the ray hit (x, y) coordinates in to the x-coordinate within the texture.
