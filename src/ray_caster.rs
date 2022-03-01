@@ -12,7 +12,7 @@ const PLAYER_DIAM: i32 = 6;
 const PLAYER_LEN: f64 = 40.0;
 const FIELD_OF_VIEW: f64 = PI / 2.0;
 
-const TILE_SIZE: u32 = 4;
+const TILE_SIZE: f64 = 4.8;
 
 // FIXME this is suspicious, probably use Option or Result?
 struct Nothing;
@@ -24,9 +24,7 @@ pub struct RayHit {
     pub tex_x: usize,
 }
 
-pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
-    let height = PIX_HEIGHT;
-    let n_rays = PIX_WIDTH;
+pub fn draw_rays(n_rays: u32, height: u32, map: &Map, player: &Player) -> Vec<RayHit> {
     let fov_delta = FIELD_OF_VIEW / (n_rays as f64);
     let mut hits: Vec<RayHit> = Vec::new();
     for i in 0..n_rays {
@@ -42,7 +40,7 @@ pub fn draw_rays(map: &Map, player: &Player) -> Vec<RayHit> {
         let (_, _, distance, tile) = hit;
 
         let adj_distance = distance * offset.cos();
-        let ray_height = (TILE_SIZE * n_rays) as f64 / adj_distance;
+        let ray_height = TILE_SIZE * n_rays as f64 / adj_distance;
         let tex_x = ray_to_tex_coordinatinates(hit.0, hit.1, horiz);
         hits.push(RayHit {
             height: min(height, ray_height as u32),
@@ -156,10 +154,19 @@ fn read_map(map: &Map, x: f64, y: f64) -> Result<Tile, Nothing> {
 /// part of the texture the ray hit.
 // TODO consider moving this over to the drawing routine instead
 fn ray_to_tex_coordinatinates(rx: f64, ry: f64, horizontal: bool) -> usize {
+    let tx = (rx / MAP_SCALE_W as f64).fract();
+    let ty = (ry / MAP_SCALE_H as f64).fract();
+
     let fract = if horizontal {
-        (rx / MAP_SCALE_W as f64).fract()
+        if ty < 0.5 {
+            1.0 - tx
+        } else {
+            tx
+        }
+    } else if tx < 0.5 {
+        ty
     } else {
-        (ry / MAP_SCALE_H as f64).fract()
+        1.0 - ty
     };
     (fract * WALLPIC_WIDTH as f64) as usize
 }
