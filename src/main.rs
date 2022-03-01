@@ -77,10 +77,7 @@ pub fn main() {
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
-    show_title(&game, &mut video);
-    while window.get_keys_pressed(KeyRepeat::No).is_empty() {
-        video.present(&mut window);
-    }
+    show_title(&game, &mut video, &mut window);
 
     while process_input(&window, &mut game.player).is_ok() {
         draw_world(&game, &mut video);
@@ -115,9 +112,14 @@ fn process_input(window: &Window, player: &mut player::Player) -> Result<(), Str
     Ok(())
 }
 
-fn show_title(game: &Game, video: &mut Video) {
+fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
     let titlepic = game.cache.get_pic(cache::TITLEPIC);
     video.draw_texture(0, 0, titlepic);
+
+    // wait for input
+    while window.get_keys_pressed(KeyRepeat::No).is_empty() {
+        video.present(window);
+    }
 }
 
 fn draw_world(game: &Game, video: &mut Video) {
