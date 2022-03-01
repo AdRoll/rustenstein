@@ -49,41 +49,9 @@ struct Video {
     pub pix_width: u32,
     pub pix_height: u32,
     pub pix_center: u32,
-    pub scale_factor: u32,
+    pub scale: u32,
     pub color_map: ColorMap,
     pub buffer: Vec<u32>,
-    pub window: Window,
-}
-
-impl Video {
-    pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
-        let offset = (y * self.width + x) as usize;
-        let (r, g, b) = self.color_map[color_index as usize];
-        let (r, g, b) = (r as u32, g as u32, b as u32);
-
-        // convert rgb to u32
-        self.buffer[offset] = (r << 16) | (g << 8) | b;
-    }
-
-    pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
-        let offset = (y * self.width + x) as usize;
-        let (r, g, b) = self.color_map[color_index as usize];
-
-        // apply a darkness factor based on distance from the center
-        let factor =
-            std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
-        let r = (r as f64 * factor) as u32;
-        let g = (g as f64 * factor) as u32;
-        let b = (b as f64 * factor) as u32;
-
-        self.buffer[offset] = (r << 16) | (g << 8) | b;
-    }
-
-    pub fn present(&mut self) {
-        self.window
-            .update_with_buffer(&self.buffer, self.width as usize, self.height as usize)
-            .unwrap();
-    }
 }
 
 struct Game {
@@ -107,13 +75,11 @@ pub fn main() {
     let map = game.cache.get_map(game.episode, game.level);
     let mut player = map.find_player();
 
-    let width = BASE_WIDTH * args.scale;
-    let height = BASE_HEIGHT * args.scale;
-
+    let mut video = Video::new(args.scale);
     let mut window = Window::new(
         "rustenstein 3D",
-        width as usize,
-        height as usize,
+        video.width as usize,
+        video.height as usize,
         WindowOptions::default(),
     )
     .unwrap();
@@ -121,36 +87,19 @@ pub fn main() {
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
-    let pix_width = width;
-    let pix_height = height - STATUS_LINES * args.scale;
-    let pix_center = pix_height / 2;
-    let buffer: Vec<u32> = vec![0; (width * height) as usize];
-
-    let mut video = Video {
-        scale_factor: args.scale,
-        width,
-        height,
-        pix_width,
-        pix_height,
-        pix_center,
-        color_map: build_color_map(),
-        buffer,
-        window,
-    };
-
     show_title(&game, &mut video);
-    while video.window.get_keys_pressed(KeyRepeat::No).is_empty() {
-        video.present();
+    while window.get_keys_pressed(KeyRepeat::No).is_empty() {
+        video.present(&mut window);
     }
 
-    while process_input(&video.window, &mut player).is_ok() {
-        let ray_hits = ray_caster::draw_rays(pix_width, pix_height, map, &player);
+    while process_input(&window, &mut player).is_ok() {
+        let ray_hits = ray_caster::draw_rays(video.pix_width, video.pix_height, map, &player);
 
         draw_world(&game, &mut video, &ray_hits);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
 
-        video.present();
+        video.present(&mut window);
     }
 }
 
@@ -176,6 +125,57 @@ fn process_input(window: &Window, player: &mut player::Player) -> Result<(), Str
     }
 
     Ok(())
+}
+
+impl Video {
+    pub fn new(scale: u32) -> Self {
+        let width = BASE_WIDTH * scale;
+        let height = BASE_HEIGHT * scale;
+        let pix_width = width;
+        let pix_height = height - STATUS_LINES * scale;
+        let pix_center = pix_height / 2;
+        let buffer: Vec<u32> = vec![0; (width * height) as usize];
+
+        Self {
+            scale,
+            width,
+            height,
+            pix_width,
+            pix_height,
+            pix_center,
+            color_map: build_color_map(),
+            buffer,
+        }
+    }
+
+    pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+        let (r, g, b) = (r as u32, g as u32, b as u32);
+
+        // convert rgb to u32
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
+    pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+
+        // apply a darkness factor based on distance from the center
+        let factor =
+            std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
+        let r = (r as f64 * factor) as u32;
+        let g = (g as f64 * factor) as u32;
+        let b = (b as f64 * factor) as u32;
+
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
+    pub fn present(&self, window: &mut Window) {
+        window
+            .update_with_buffer(&self.buffer, self.width as usize, self.height as usize)
+            .unwrap();
+    }
 }
 
 fn show_title(game: &Game, video: &mut Video) {
@@ -255,8 +255,8 @@ fn draw_status(game: &Game, video: &mut Video) {
         _ => unreachable!(),
     };
 
-    let shift_x = video.pix_width / 2 - facepic.width * video.scale_factor;
-    let shift_y = video.pix_height + facepic.height * video.scale_factor / 8;
+    let shift_x = video.pix_width / 2 - facepic.width * video.scale;
+    let shift_y = video.pix_height + facepic.height * video.scale / 8;
     draw_to_texture(video, shift_x, shift_y, facepic);
 }
 
@@ -361,15 +361,15 @@ fn draw_to_texture(video: &mut Video, shift_x: u32, shift_y: u32, pic: &Picture)
             let source_index =
                 (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
             let color = pic.data[source_index as usize];
-            for i in 0..video.scale_factor {
-                for j in 0..video.scale_factor {
+            for i in 0..video.scale {
+                for j in 0..video.scale {
                     video.put_pixel(sci + j + shift_x, scj + i + shift_y, color as usize);
                 }
             }
 
-            sci += video.scale_factor
+            sci += video.scale
         }
-        scj += video.scale_factor
+        scj += video.scale
     }
 }
 
