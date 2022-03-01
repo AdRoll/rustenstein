@@ -14,7 +14,6 @@ mod map;
 mod player;
 mod ray_caster;
 
-use crate::ray_caster::RayHit;
 use constants::*;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
@@ -55,6 +54,8 @@ struct Video {
 }
 
 struct Game {
+    player: player::Player,
+    map: map::Map,
     episode: usize,
     level: usize,
     start_time: Instant,
@@ -63,18 +64,7 @@ struct Game {
 
 pub fn main() {
     let args = Opts::parse();
-
-    // we only support episode 0 for now -- the shareware one
-    let game = Game {
-        episode: 0,
-        level: args.level - 1,
-        start_time: Instant::now(),
-        cache: cache::init(),
-    };
-
-    let map = game.cache.get_map(game.episode, game.level);
-    let mut player = map.find_player();
-
+    let mut game = Game::new(args.level);
     let mut video = Video::new(args.scale);
     let mut window = Window::new(
         "rustenstein 3D",
@@ -92,10 +82,8 @@ pub fn main() {
         video.present(&mut window);
     }
 
-    while process_input(&window, &mut player).is_ok() {
-        let ray_hits = ray_caster::draw_rays(video.pix_width, video.pix_height, map, &player);
-
-        draw_world(&game, &mut video, &ray_hits);
+    while process_input(&window, &mut game.player).is_ok() {
+        draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
 
@@ -132,7 +120,11 @@ fn show_title(game: &Game, video: &mut Video) {
     video.draw_texture(0, 0, titlepic);
 }
 
-fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
+fn draw_world(game: &Game, video: &mut Video) {
+    // TODO consider passing game as param here
+    let ray_hits =
+        ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
+
     // draw floor and ceiling
     for x in 0..video.pix_width {
         for y in 0..video.pix_height / 2 {
@@ -206,6 +198,24 @@ fn draw_status(game: &Game, video: &mut Video) {
     let shift_x = video.pix_width / 2 - facepic.width * video.scale;
     let shift_y = video.pix_height + facepic.height * video.scale / 8;
     video.draw_texture(shift_x, shift_y, facepic);
+}
+
+impl Game {
+    pub fn new(level: usize) -> Self {
+        let level = level - 1;
+        let cache = cache::init();
+        let map = cache.get_map(0, level);
+        let player = map.find_player();
+        Self {
+            cache,
+            map,
+            player,
+            // we only support episode 0 for now -- the shareware one
+            episode: 0,
+            level,
+            start_time: Instant::now(),
+        }
+    }
 }
 
 impl Video {
@@ -371,7 +381,6 @@ impl Video {
         }
     }
 }
-
 
 /// Returns an array of colors that maps indexes as used by wolf3d graphics
 /// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.

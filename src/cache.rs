@@ -197,8 +197,8 @@ impl Cache {
         &self.sounds[index]
     }
 
-    pub fn get_map(&self, episode: usize, level: usize) -> &Map {
-        &self.maps[level + 10 * episode]
+    pub fn get_map(&self, episode: usize, level: usize) -> Map {
+        self.maps[level + 10 * episode].clone()
     }
 }
 

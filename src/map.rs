@@ -24,7 +24,7 @@ pub enum Actor {
     PushWall,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Map {
     plane0: [[u16; MAP_HEIGHT]; MAP_WIDTH],
     plane1: [[u16; MAP_HEIGHT]; MAP_WIDTH],
