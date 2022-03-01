@@ -378,9 +378,8 @@ fn draw_to_texture(
             let source_index =
                 (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
             let color = pic.data[source_index as usize];
-            // FIXME what's with this ..3 ???
-            for i in 0..3 {
-                for j in 0..3 {
+            for i in 0..video.scale_factor {
+                for j in 0..video.scale_factor {
                     put_pixel(
                         buffer,
                         video.pix_width,
@@ -391,9 +390,9 @@ fn draw_to_texture(
                 }
             }
 
-            sci += 3
+            sci += video.scale_factor
         }
-        scj += 3
+        scj += video.scale_factor
     }
 }
 
