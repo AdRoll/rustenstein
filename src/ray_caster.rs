@@ -1,5 +1,3 @@
-extern crate sdl2;
-
 use crate::constants::*;
 use crate::map;
 use crate::map::{Direction, Map, Tile};

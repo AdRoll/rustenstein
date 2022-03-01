@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
-extern crate sdl2;
-
 use cache::Picture;
 use core::slice::Iter;
 use std::time::Duration;
@@ -14,7 +12,6 @@ use minifb::{Key, KeyRepeat, Window, WindowOptions};
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
 mod constants;
-mod input_manager;
 mod map;
 mod player;
 mod ray_caster;
@@ -97,10 +94,7 @@ pub fn main() {
         width as usize,
         height as usize,
         WindowOptions::default(),
-    )
-    .unwrap_or_else(|e| {
-        panic!("{}", e);
-    });
+    ).unwrap();
 
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
