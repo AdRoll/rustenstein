@@ -164,9 +164,9 @@ impl Video {
         // apply a darkness factor based on distance from the center
         let factor =
             std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
-        let r = (r as f64 * factor) as u32;
-        let g = (g as f64 * factor) as u32;
-        let b = (b as f64 * factor) as u32;
+        let r = (r as f64 * factor) as u8 as u32;
+        let g = (g as f64 * factor) as u8 as u32;
+        let b = (b as f64 * factor) as u8 as u32;
 
         self.buffer[offset] = (r << 16) | (g << 8) | b;
     }
