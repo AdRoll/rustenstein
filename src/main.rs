@@ -127,60 +127,9 @@ fn process_input(window: &Window, player: &mut player::Player) -> Result<(), Str
     Ok(())
 }
 
-impl Video {
-    pub fn new(scale: u32) -> Self {
-        let width = BASE_WIDTH * scale;
-        let height = BASE_HEIGHT * scale;
-        let pix_width = width;
-        let pix_height = height - STATUS_LINES * scale;
-        let pix_center = pix_height / 2;
-        let buffer: Vec<u32> = vec![0; (width * height) as usize];
-
-        Self {
-            scale,
-            width,
-            height,
-            pix_width,
-            pix_height,
-            pix_center,
-            color_map: build_color_map(),
-            buffer,
-        }
-    }
-
-    pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
-        let offset = (y * self.width + x) as usize;
-        let (r, g, b) = self.color_map[color_index as usize];
-        let (r, g, b) = (r as u32, g as u32, b as u32);
-
-        // convert rgb to u32
-        self.buffer[offset] = (r << 16) | (g << 8) | b;
-    }
-
-    pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
-        let offset = (y * self.width + x) as usize;
-        let (r, g, b) = self.color_map[color_index as usize];
-
-        // apply a darkness factor based on distance from the center
-        let factor =
-            std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
-        let r = (r as f64 * factor) as u8 as u32;
-        let g = (g as f64 * factor) as u8 as u32;
-        let b = (b as f64 * factor) as u8 as u32;
-
-        self.buffer[offset] = (r << 16) | (g << 8) | b;
-    }
-
-    pub fn present(&self, window: &mut Window) {
-        window
-            .update_with_buffer(&self.buffer, self.width as usize, self.height as usize)
-            .unwrap();
-    }
-}
-
 fn show_title(game: &Game, video: &mut Video) {
     let titlepic = game.cache.get_pic(cache::TITLEPIC);
-    draw_to_texture(video, 0, 0, titlepic);
+    video.draw_texture(0, 0, titlepic);
 }
 
 fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
@@ -235,8 +184,7 @@ fn draw_weapon(game: &Game, video: &mut Video) {
     let (weapon_shape, weapon_data) = game.cache.get_sprite(209);
 
     // TODO pass the shape num instead of pieces of the shape
-    simple_scale_shape(
-        video,
+    video.simple_scale_shape(
         weapon_shape.left_pix,
         weapon_shape.right_pix,
         &weapon_shape.dataofs,
@@ -246,7 +194,7 @@ fn draw_weapon(game: &Game, video: &mut Video) {
 
 fn draw_status(game: &Game, video: &mut Video) {
     let statuspic = game.cache.get_pic(cache::STATUSBARPIC);
-    draw_to_texture(video, 0, video.pix_height, statuspic);
+    video.draw_texture(0, video.pix_height, statuspic);
 
     let facepic = match game.start_time.elapsed().as_secs() % 3 {
         0 => game.cache.get_pic(cache::FACE1APIC),
@@ -257,121 +205,173 @@ fn draw_status(game: &Game, video: &mut Video) {
 
     let shift_x = video.pix_width / 2 - facepic.width * video.scale;
     let shift_y = video.pix_height + facepic.height * video.scale / 8;
-    draw_to_texture(video, shift_x, shift_y, facepic);
+    video.draw_texture(shift_x, shift_y, facepic);
 }
 
-fn simple_scale_shape(
-    video: &mut Video,
-    left_pix: u16,
-    right_pix: u16,
-    dataofs: &[u16],
-    shape_bytes: &[u8],
-) {
-    let sprite_scale_factor = 2;
-    let xcenter = video.pix_width / 2;
-    let height = video.pix_height + 1;
+impl Video {
+    pub fn new(scale: u32) -> Self {
+        let width = BASE_WIDTH * scale;
+        let height = BASE_HEIGHT * scale;
+        let pix_width = width;
+        let pix_height = height - STATUS_LINES * scale;
+        let pix_center = pix_height / 2;
+        let buffer: Vec<u32> = vec![0; (width * height) as usize];
 
-    let scale = height >> 1;
-    let pixheight = scale * sprite_scale_factor;
-    let actx = xcenter - scale;
-    let upperedge = video.pix_height / 2 - scale;
-    // cmdptr=(word *) shape->dataofs;
-    // cmdptr = iter(shape.dataofs)
-    let mut cmdptr = dataofs.iter();
-
-    let mut i = left_pix;
-    let mut pixcnt = i as u32 * pixheight;
-    let mut rpix = (pixcnt >> 6) + actx;
-
-    while i <= right_pix {
-        let mut lpix = rpix;
-        if lpix >= video.pix_width {
-            break;
+        Self {
+            scale,
+            width,
+            height,
+            pix_width,
+            pix_height,
+            pix_center,
+            color_map: build_color_map(),
+            buffer,
         }
+    }
 
-        pixcnt += pixheight;
-        rpix = (pixcnt >> 6) + actx;
+    pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+        let (r, g, b) = (r as u32, g as u32, b as u32);
 
-        if lpix != rpix && rpix > 0 {
-            if rpix > video.pix_width {
-                rpix = video.pix_width;
-                i = right_pix + 1;
-            }
-            let read_word = |line: &mut Iter<u8>| {
-                u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
-            };
-            let read_word_signed = |line: &mut Iter<u8>| {
-                i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
-            };
+        // convert rgb to u32
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
 
-            let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
-            while lpix < rpix {
-                let mut line = cline.iter();
-                let mut endy = read_word(&mut line);
-                while endy > 0 {
-                    endy >>= 1;
-                    let newstart = read_word_signed(&mut line);
-                    let starty = read_word(&mut line) >> 1;
-                    let mut j = starty;
-                    let mut ycnt = j as u32 * pixheight;
-                    let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+    pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
 
-                    let mut pixy = screndy as u32;
-                    while j < endy {
-                        let mut scrstarty = screndy;
-                        ycnt += pixheight;
-                        screndy = (ycnt >> 6) as i32 + upperedge as i32;
-                        if scrstarty != screndy && screndy > 0 {
-                            let index = newstart + j as i16;
-                            let col = if index >= 0 {
-                                shape_bytes[index as usize]
-                            } else {
-                                0
-                            };
-                            if scrstarty < 0 {
-                                scrstarty = 0;
-                            }
-                            if screndy > video.pix_height as i32 {
-                                screndy = video.pix_height as i32;
-                                j = endy;
-                            }
+        // apply a darkness factor based on distance from the center
+        let factor =
+            std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
+        let r = (r as f64 * factor) as u8 as u32;
+        let g = (g as f64 * factor) as u8 as u32;
+        let b = (b as f64 * factor) as u8 as u32;
 
-                            while scrstarty < screndy {
-                                video.put_pixel(lpix, pixy, col as usize);
-                                pixy += 1;
-                                scrstarty += 1;
-                            }
-                        }
-                        j += 1;
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
+    pub fn present(&self, window: &mut Window) {
+        window
+            .update_with_buffer(&self.buffer, self.width as usize, self.height as usize)
+            .unwrap();
+    }
+
+    pub fn draw_texture(&mut self, shift_x: u32, shift_y: u32, pic: &Picture) {
+        let mut scj = 0;
+        for y in 0..pic.height {
+            let mut sci = 0;
+            for x in 0..pic.width {
+                let source_index =
+                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let color = pic.data[source_index as usize];
+                for i in 0..self.scale {
+                    for j in 0..self.scale {
+                        self.put_pixel(sci + j + shift_x, scj + i + shift_y, color as usize);
                     }
-                    endy = read_word(&mut line);
                 }
-                lpix += 1;
+
+                sci += self.scale
             }
+            scj += self.scale
         }
-        i += 1;
+    }
+
+    fn simple_scale_shape(
+        &mut self,
+        left_pix: u16,
+        right_pix: u16,
+        dataofs: &[u16],
+        shape_bytes: &[u8],
+    ) {
+        let sprite_scale_factor = 2;
+        let xcenter = self.pix_width / 2;
+        let height = self.pix_height + 1;
+
+        let scale = height >> 1;
+        let pixheight = scale * sprite_scale_factor;
+        let actx = xcenter - scale;
+        let upperedge = self.pix_height / 2 - scale;
+        // cmdptr=(word *) shape->dataofs;
+        // cmdptr = iter(shape.dataofs)
+        let mut cmdptr = dataofs.iter();
+
+        let mut i = left_pix;
+        let mut pixcnt = i as u32 * pixheight;
+        let mut rpix = (pixcnt >> 6) + actx;
+
+        while i <= right_pix {
+            let mut lpix = rpix;
+            if lpix >= self.pix_width {
+                break;
+            }
+
+            pixcnt += pixheight;
+            rpix = (pixcnt >> 6) + actx;
+
+            if lpix != rpix && rpix > 0 {
+                if rpix > self.pix_width {
+                    rpix = self.pix_width;
+                    i = right_pix + 1;
+                }
+                let read_word = |line: &mut Iter<u8>| {
+                    u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+                let read_word_signed = |line: &mut Iter<u8>| {
+                    i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+
+                let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
+                while lpix < rpix {
+                    let mut line = cline.iter();
+                    let mut endy = read_word(&mut line);
+                    while endy > 0 {
+                        endy >>= 1;
+                        let newstart = read_word_signed(&mut line);
+                        let starty = read_word(&mut line) >> 1;
+                        let mut j = starty;
+                        let mut ycnt = j as u32 * pixheight;
+                        let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+
+                        let mut pixy = screndy as u32;
+                        while j < endy {
+                            let mut scrstarty = screndy;
+                            ycnt += pixheight;
+                            screndy = (ycnt >> 6) as i32 + upperedge as i32;
+                            if scrstarty != screndy && screndy > 0 {
+                                let index = newstart + j as i16;
+                                let col = if index >= 0 {
+                                    shape_bytes[index as usize]
+                                } else {
+                                    0
+                                };
+                                if scrstarty < 0 {
+                                    scrstarty = 0;
+                                }
+                                if screndy > self.pix_height as i32 {
+                                    screndy = self.pix_height as i32;
+                                    j = endy;
+                                }
+
+                                while scrstarty < screndy {
+                                    self.put_pixel(lpix, pixy, col as usize);
+                                    pixy += 1;
+                                    scrstarty += 1;
+                                }
+                            }
+                            j += 1;
+                        }
+                        endy = read_word(&mut line);
+                    }
+                    lpix += 1;
+                }
+            }
+            i += 1;
+        }
     }
 }
 
-fn draw_to_texture(video: &mut Video, shift_x: u32, shift_y: u32, pic: &Picture) {
-    let mut scj = 0;
-    for y in 0..pic.height {
-        let mut sci = 0;
-        for x in 0..pic.width {
-            let source_index =
-                (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-            let color = pic.data[source_index as usize];
-            for i in 0..video.scale {
-                for j in 0..video.scale {
-                    video.put_pixel(sci + j + shift_x, scj + i + shift_y, color as usize);
-                }
-            }
-
-            sci += video.scale
-        }
-        scj += video.scale
-    }
-}
 
 /// Returns an array of colors that maps indexes as used by wolf3d graphics
 /// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.
