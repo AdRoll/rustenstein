@@ -1,8 +1,6 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
 use cache::Picture;
 use core::slice::Iter;
-use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
@@ -94,7 +92,8 @@ pub fn main() {
         width as usize,
         height as usize,
         WindowOptions::default(),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));

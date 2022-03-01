@@ -1,5 +1,4 @@
 use crate::constants::{MAP_HEIGHT, MAP_WIDTH};
-use crate::map;
 use crate::map::Map;
 use std::fs;
 use std::path::Path;

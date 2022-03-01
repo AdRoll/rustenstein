@@ -1,6 +1,6 @@
 use crate::constants::*;
 use crate::player;
-use std::{fmt, fs};
+use std::fmt;
 
 #[derive(Copy, Clone)]
 pub enum Tile {

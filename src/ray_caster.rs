@@ -1,6 +1,5 @@
 use crate::constants::*;
-use crate::map;
-use crate::map::{Direction, Map, Tile};
+use crate::map::{Map, Tile};
 use crate::player::Player;
 use num::pow;
 use std::cmp::min;
