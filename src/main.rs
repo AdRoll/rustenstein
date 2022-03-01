@@ -56,6 +56,29 @@ struct Video {
 }
 
 impl Video {
+    pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+        let (r, g, b) = (r as u32, g as u32, b as u32);
+
+        // convert rgb to u32
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
+    pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+
+        // apply a darkness factor based on distance from the center
+        let factor =
+            std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
+        let r = (r as f64 * factor) as u32;
+        let g = (g as f64 * factor) as u32;
+        let b = (b as f64 * factor) as u32;
+
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
     pub fn present(&mut self) {
         self.window
             .update_with_buffer(&self.buffer, self.width as usize, self.height as usize)
@@ -157,22 +180,17 @@ fn process_input(window: &Window, player: &mut player::Player) -> Result<(), Str
 
 fn show_title(game: &Game, video: &mut Video) {
     let titlepic = game.cache.get_pic(cache::TITLEPIC);
-    draw_to_texture(video, 0, 0, titlepic, video.color_map);
+    draw_to_texture(video, 0, 0, titlepic);
 }
 
 fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
-    // draw floor and ceiling colors
-    let floor = video.color_map[VGA_FLOOR_COLOR];
-    let ceiling = video.color_map[VGA_CEILING_COLORS[game.level]];
-
+    // draw floor and ceiling
     for x in 0..video.pix_width {
         for y in 0..video.pix_height / 2 {
-            let ceilings = darken_color(ceiling, video.pix_center - y, video.pix_center);
-            put_pixel(&mut video.buffer, video.pix_width, x, y, ceilings);
+            video.put_darkened_pixel(x, y, VGA_CEILING_COLORS[game.level], video.pix_center - y);
         }
         for y in video.pix_height / 2..video.pix_height {
-            let floors = darken_color(floor, y - video.pix_center, video.pix_center);
-            put_pixel(&mut video.buffer, video.pix_width, x, y, floors);
+            video.put_darkened_pixel(x, y, VGA_FLOOR_COLOR, y - video.pix_center);
         }
     }
 
@@ -203,12 +221,8 @@ fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
             if y >= 0 && y <= video.pix_height as i32 {
                 let source = ytex as usize + xoff;
                 let color_index = texture[source] as usize;
-                let mut color = video.color_map[color_index];
 
-                // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                color = darken_color(color, current as u32, video.pix_center);
-
-                put_pixel(&mut video.buffer, video.pix_width, x, y as u32, color);
+                video.put_darkened_pixel(x, y as u32, color_index, current as u32);
             }
 
             ytex += step;
@@ -232,7 +246,7 @@ fn draw_weapon(game: &Game, video: &mut Video) {
 
 fn draw_status(game: &Game, video: &mut Video) {
     let statuspic = game.cache.get_pic(cache::STATUSBARPIC);
-    draw_to_texture(video, 0, video.pix_height, statuspic, video.color_map);
+    draw_to_texture(video, 0, video.pix_height, statuspic);
 
     let facepic = match game.start_time.elapsed().as_secs() % 3 {
         0 => game.cache.get_pic(cache::FACE1APIC),
@@ -243,16 +257,7 @@ fn draw_status(game: &Game, video: &mut Video) {
 
     let shift_x = video.pix_width / 2 - facepic.width * video.scale_factor;
     let shift_y = video.pix_height + facepic.height * video.scale_factor / 8;
-    draw_to_texture(video, shift_x, shift_y, facepic, video.color_map);
-}
-
-fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
-    let (r, g, b) = color;
-    let factor = std::cmp::min(lightness, max) as f64 / max as f64 / DARKNESS;
-    let rs = (r as f64 * factor) as u8;
-    let gs = (g as f64 * factor) as u8;
-    let bs = (b as f64 * factor) as u8;
-    (rs, gs, bs)
+    draw_to_texture(video, shift_x, shift_y, facepic);
 }
 
 fn simple_scale_shape(
@@ -311,12 +316,7 @@ fn simple_scale_shape(
                     let mut ycnt = j as u32 * pixheight;
                     let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
 
-                    let mut vmem_index: usize = if screndy < 0 {
-                        lpix as usize * 3
-                    } else {
-                        screndy as usize * video.pix_width as usize + lpix as usize
-                    };
-
+                    let mut pixy = screndy as u32;
                     while j < endy {
                         let mut scrstarty = screndy;
                         ycnt += pixheight;
@@ -337,10 +337,8 @@ fn simple_scale_shape(
                             }
 
                             while scrstarty < screndy {
-                                // FIXME can put pixel be used here instead?
-                                let color = video.color_map[col as usize];
-                                video.buffer[vmem_index] = rgb_to_u32(color);
-                                vmem_index += video.pix_width as usize;
+                                video.put_pixel(lpix, pixy, col as usize);
+                                pixy += 1;
                                 scrstarty += 1;
                             }
                         }
@@ -355,15 +353,7 @@ fn simple_scale_shape(
     }
 }
 
-fn draw_to_texture(
-    video: &mut Video,
-    shift_x: u32,
-    shift_y: u32,
-    pic: &Picture,
-    color_map: ColorMap,
-) {
-    let buffer = &mut video.buffer;
-
+fn draw_to_texture(video: &mut Video, shift_x: u32, shift_y: u32, pic: &Picture) {
     let mut scj = 0;
     for y in 0..pic.height {
         let mut sci = 0;
@@ -373,13 +363,7 @@ fn draw_to_texture(
             let color = pic.data[source_index as usize];
             for i in 0..video.scale_factor {
                 for j in 0..video.scale_factor {
-                    put_pixel(
-                        buffer,
-                        video.pix_width,
-                        sci + j + shift_x,
-                        scj + i + shift_y,
-                        color_map[color as usize],
-                    );
+                    video.put_pixel(sci + j + shift_x, scj + i + shift_y, color as usize);
                 }
             }
 
@@ -387,17 +371,6 @@ fn draw_to_texture(
         }
         scj += video.scale_factor
     }
-}
-
-fn rgb_to_u32(color: (u8, u8, u8)) -> u32 {
-    let (r, g, b) = color;
-    let (r, g, b) = (r as u32, g as u32, b as u32);
-    (r << 16) | (g << 8) | b
-}
-
-fn put_pixel(buffer: &mut Vec<u32>, pitch: u32, x: u32, y: u32, color: (u8, u8, u8)) {
-    let offset = (y * pitch + x) as usize;
-    buffer[offset] = rgb_to_u32(color);
 }
 
 /// Returns an array of colors that maps indexes as used by wolf3d graphics
