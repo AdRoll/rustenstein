@@ -1,7 +1,6 @@
 use crate::constants::*;
 use crate::map::{Map, Tile};
 use crate::player::Player;
-use num::pow;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::f64::consts::PI;
@@ -9,8 +8,6 @@ use std::f64::consts::PI;
 const PLAYER_DIAM: i32 = 6;
 const PLAYER_LEN: f64 = 40.0;
 const FIELD_OF_VIEW: f64 = PI / 2.0;
-
-const TILE_SIZE: f64 = 4.8;
 
 // FIXME this is suspicious, probably use Option or Result?
 struct Nothing;
@@ -143,18 +140,18 @@ fn follow_ray(
         let mx = cdiv(rx, MAP_SCALE_W, 0.0);
         let my = cdiv(ry, MAP_SCALE_H, 0.0);
         if mx >= MAP_WIDTH || my >= MAP_HEIGHT {
-            return (rx, ry, distance(player, rx, ry), 0, visited);
+            return (rx, ry, player.distance_to(rx, ry), 0, visited);
         }
         visited.insert((mx, my));
 
         if let Tile::Wall(tile) = map.tile_at(mx as u8, my as u8) {
-            return (rx, ry, distance(player, rx, ry), tile, visited);
+            return (rx, ry, player.distance_to(rx, ry), tile, visited);
         }
         rx += xo;
         ry += yo;
     }
 
-    (rx, ry, distance(player, rx, ry), 0, visited)
+    (rx, ry, player.distance_to(rx, ry), 0, visited)
 }
 
 /// Turn the ray hit (x, y) coordinates in to the x-coordinate within the texture.
@@ -186,8 +183,4 @@ fn cdiv(x: f64, scale: u32, updown: f64) -> usize {
 
 fn ctrunc(x: f64, scale: u32, updown: f64) -> f64 {
     (x / scale as f64 + updown).trunc() * scale as f64
-}
-
-fn distance(player: &Player, x: f64, y: f64) -> f64 {
-    (pow(x - player.x, 2) + pow(y - player.y, 2)).sqrt()
 }

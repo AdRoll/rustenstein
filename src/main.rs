@@ -1,7 +1,12 @@
 #![allow(dead_code)]
 use cache::Picture;
 use core::slice::Iter;
-use std::time::Instant;
+use map::Actor;
+use ray_caster::RayHit;
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use clap::Parser;
 
@@ -60,6 +65,7 @@ struct Game {
     level: usize,
     start_time: Instant,
     cache: cache::Cache,
+    static_objects: HashMap<(usize, usize), u16>,
 }
 
 pub fn main() {
@@ -80,7 +86,11 @@ pub fn main() {
     show_title(&game, &mut video, &mut window);
 
     while process_input(&window, &mut game.player).is_ok() {
-        draw_world(&game, &mut video);
+        let (ray_hits, visible_tiles) =
+            ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
+
+        draw_world(&game, &mut video, &ray_hits);
+        draw_actors(&game, &mut video, &ray_hits, &visible_tiles);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
 
@@ -122,11 +132,7 @@ fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
     }
 }
 
-fn draw_world(game: &Game, video: &mut Video) {
-    // TODO consider passing game as param here
-    let (ray_hits, _) =
-        ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
-
+fn draw_world(game: &Game, video: &mut Video, ray_hits: &Vec<RayHit>) {
     // draw floor and ceiling
     for x in 0..video.pix_width {
         for y in 0..video.pix_height / 2 {
@@ -173,11 +179,48 @@ fn draw_world(game: &Game, video: &mut Video) {
     }
 }
 
+fn draw_actors(
+    game: &Game,
+    video: &mut Video,
+    ray_hits: &[RayHit],
+    visible: &HashSet<(usize, usize)>,
+) {
+    let mut statics = Vec::new();
+    for &(tx, ty) in visible {
+        if let Some(shapenum) = game.static_objects.get(&(tx, ty)) {
+            // FIXME is this ok?
+            let viewx = tx * MAP_SCALE_W as usize;
+            let viewy = ty * MAP_SCALE_H as usize;
+            let distance = game.player.distance_to(viewx as f64, viewy as f64);
+            let height = (TILE_SIZE * video.pix_width as f64 / distance) as u32;
+
+            let pos = statics
+                .binary_search_by_key(&height, |&(h, _, _)| h)
+                .unwrap_or_else(|x| x);
+            statics.insert(pos, (height, viewx, shapenum));
+        }
+    }
+
+    for (height, viewx, shapenum) in statics {
+        let (shape, data) = game.cache.get_sprite(*shapenum as usize);
+
+        // TODO pass the shape num instead of pieces of the shape?
+        video.scale_shape(
+            viewx,
+            height,
+            shape.left_pix,
+            shape.right_pix,
+            &shape.dataofs,
+            data,
+        );
+    }
+}
+
 fn draw_weapon(game: &Game, video: &mut Video) {
     // FIXME use a constant for that 209
     let (weapon_shape, weapon_data) = game.cache.get_sprite(209);
 
-    // TODO pass the shape num instead of pieces of the shape
+    // TODO pass the shape num instead of pieces of the shape?
     video.simple_scale_shape(
         weapon_shape.left_pix,
         weapon_shape.right_pix,
@@ -208,6 +251,16 @@ impl Game {
         let cache = cache::init();
         let map = cache.get_map(0, level);
         let player = map.find_player();
+
+        let mut static_objects = HashMap::new();
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                if let Some(Actor::Static(shapenum)) = map.actor_at(x, y) {
+                    static_objects.insert((x, y), shapenum);
+                }
+            }
+        }
+
         Self {
             cache,
             map,
@@ -216,6 +269,7 @@ impl Game {
             episode: 0,
             level,
             start_time: Instant::now(),
+            static_objects,
         }
     }
 }
@@ -381,6 +435,18 @@ impl Video {
             }
             i += 1;
         }
+    }
+
+    fn scale_shape(
+        &mut self,
+        viewx: usize,
+        height: u32,
+        left_pix: u16,
+        right_pix: u16,
+        dataofs: &[u16],
+        shape_bytes: &[u8],
+    ) {
+        //todo!();
     }
 }
 

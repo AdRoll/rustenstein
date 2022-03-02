@@ -14,6 +14,8 @@ pub const STATUS_LINES: u32 = 40;
 pub const BASE_WIDTH: u32 = 320;
 pub const BASE_HEIGHT: u32 = 200;
 pub const WALLPIC_WIDTH: usize = 64;
+// where does this value come from?
+pub const TILE_SIZE: f64 = 4.8;
 
 // ok this is not a constant, we may move it to an util module later, or rename this
 pub fn norm_angle(a: f64) -> f64 {

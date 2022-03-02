@@ -1,4 +1,5 @@
 use crate::constants;
+use num::pow;
 
 const ROTATE_SPEED: f64 = 0.02;
 const MOVE_SPEED: f64 = 2.5;
@@ -28,5 +29,9 @@ impl Player {
     pub fn turn_right(&mut self) {
         self.angle -= ROTATE_SPEED;
         self.angle = constants::norm_angle(self.angle);
+    }
+
+    pub fn distance_to(&self, x: f64, y: f64) -> f64 {
+        (pow(x - self.x, 2) + pow(y - self.y, 2)).sqrt()
     }
 }
