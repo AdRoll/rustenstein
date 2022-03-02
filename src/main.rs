@@ -132,7 +132,7 @@ fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
     }
 }
 
-fn draw_world(game: &Game, video: &mut Video, ray_hits: &Vec<RayHit>) {
+fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
     // draw floor and ceiling
     for x in 0..video.pix_width {
         for y in 0..video.pix_height / 2 {
@@ -206,12 +206,13 @@ fn draw_actors(
 
         // TODO pass the shape num instead of pieces of the shape?
         video.scale_shape(
-            viewx,
+            viewx as u32,
             height,
             shape.left_pix,
             shape.right_pix,
             &shape.dataofs,
             data,
+            ray_hits,
         );
     }
 }
@@ -437,16 +438,105 @@ impl Video {
         }
     }
 
+    // FIXME this is almost identical to simple_scale_shape, except for the height check.
+    // refactor to reuse the code
     fn scale_shape(
         &mut self,
-        viewx: usize,
+        xcenter: u32,
         height: u32,
         left_pix: u16,
         right_pix: u16,
         dataofs: &[u16],
         shape_bytes: &[u8],
+        ray_hits: &[RayHit],
     ) {
-        //todo!();
+        if height > self.pix_center {
+            return;
+        }
+
+        let sprite_scale_factor = 2;
+        let scale = height;
+        let pixheight = scale * sprite_scale_factor;
+        let actx = xcenter - scale;
+        let upperedge = self.pix_height / 2 - scale;
+        // cmdptr=(word *) shape->dataofs;
+        // cmdptr = iter(shape.dataofs)
+        let mut cmdptr = dataofs.iter();
+
+        let mut i = left_pix;
+        let mut pixcnt = i as u32 * pixheight;
+        let mut rpix = (pixcnt >> 6) + actx;
+
+        while i <= right_pix {
+            let mut lpix = rpix;
+            if lpix >= self.pix_width {
+                break;
+            }
+
+            pixcnt += pixheight;
+            rpix = (pixcnt >> 6) + actx;
+
+            if lpix != rpix && rpix > 0 {
+                if rpix > self.pix_width {
+                    rpix = self.pix_width;
+                    i = right_pix + 1;
+                }
+                let read_word = |line: &mut Iter<u8>| {
+                    u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+                let read_word_signed = |line: &mut Iter<u8>| {
+                    i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+
+                let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
+                while lpix < rpix {
+                    if ray_hits[lpix as usize].height <= height {
+                        let mut line = cline.iter();
+                        let mut endy = read_word(&mut line);
+                        while endy > 0 {
+                            endy >>= 1;
+                            let newstart = read_word_signed(&mut line);
+                            let starty = read_word(&mut line) >> 1;
+                            let mut j = starty;
+                            let mut ycnt = j as u32 * pixheight;
+                            let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+
+                            let mut pixy = screndy as u32;
+                            while j < endy {
+                                let mut scrstarty = screndy;
+                                ycnt += pixheight;
+                                screndy = (ycnt >> 6) as i32 + upperedge as i32;
+                                if scrstarty != screndy && screndy > 0 {
+                                    let index = newstart + j as i16;
+                                    let col = if index >= 0 {
+                                        shape_bytes[index as usize]
+                                    } else {
+                                        0
+                                    };
+                                    if scrstarty < 0 {
+                                        scrstarty = 0;
+                                    }
+                                    if screndy > self.pix_height as i32 {
+                                        screndy = self.pix_height as i32;
+                                        j = endy;
+                                    }
+
+                                    while scrstarty < screndy {
+                                        self.put_pixel(lpix, pixy, col as usize);
+                                        pixy += 1;
+                                        scrstarty += 1;
+                                    }
+                                }
+                                j += 1;
+                            }
+                            endy = read_word(&mut line);
+                        }
+                    }
+                    lpix += 1;
+                }
+            }
+            i += 1;
+        }
     }
 }
 
