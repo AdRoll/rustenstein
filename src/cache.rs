@@ -190,7 +190,7 @@ impl Cache {
     }
 
     pub fn get_sprite(&self, index: usize) -> &(CompShape, Vec<u8>) {
-        &self.sprites[index]
+        &self.sprites[index - 21]
     }
 
     pub fn get_sound(&self, index: usize) -> &Vec<u8> {

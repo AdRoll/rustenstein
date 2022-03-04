@@ -67,7 +67,8 @@ impl Map {
             21 => Some(Actor::Player(Direction::South)),
             22 => Some(Actor::Player(Direction::West)),
             n if (23..=72).contains(&n) => Some(Actor::Static(n)),
-            124 => Some(Actor::Static(124)), //dead guard
+            // FIXME why - 8 ?
+            124 => Some(Actor::Static(124 - 8)), //dead guard
             98 => Some(Actor::PushWall),
             n if n >= 108 => Some(Actor::Enemy(n)),
             _ => None,

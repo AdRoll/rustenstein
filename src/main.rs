@@ -219,7 +219,7 @@ fn draw_actors(
 
 fn draw_weapon(game: &Game, video: &mut Video) {
     // FIXME use a constant for that 209
-    let (weapon_shape, weapon_data) = game.cache.get_sprite(209);
+    let (weapon_shape, weapon_data) = game.cache.get_sprite(230);
 
     // TODO pass the shape num instead of pieces of the shape?
     video.simple_scale_shape(
