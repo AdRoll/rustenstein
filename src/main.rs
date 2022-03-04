@@ -522,7 +522,7 @@ impl Video {
                                     }
 
                                     while scrstarty < screndy {
-                                        self.put_pixel(lpix, pixy, col as usize);
+                                        self.put_darkened_pixel(lpix, pixy, col as usize, height);
                                         pixy += 1;
                                         scrstarty += 1;
                                     }
