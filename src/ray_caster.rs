@@ -3,11 +3,6 @@ use crate::map::{Map, Tile};
 use crate::player::Player;
 use std::cmp::min;
 use std::collections::HashSet;
-use std::f64::consts::PI;
-
-const PLAYER_DIAM: i32 = 6;
-const PLAYER_LEN: f64 = 40.0;
-const FIELD_OF_VIEW: f64 = PI / 2.0;
 
 // FIXME this is suspicious, probably use Option or Result?
 struct Nothing;

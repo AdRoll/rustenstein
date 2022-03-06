@@ -9,6 +9,7 @@ use std::{
 };
 
 use clap::Parser;
+use std::f64::consts::PI;
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
@@ -188,11 +189,24 @@ fn draw_actors(
     let mut statics = Vec::new();
     for &(tx, ty) in visible {
         if let Some(shapenum) = game.static_objects.get(&(tx, ty)) {
-            // FIXME is this ok?
-            let viewx = tx * MAP_SCALE_W as usize;
-            let viewy = ty * MAP_SCALE_H as usize;
-            let distance = game.player.distance_to(viewx as f64, viewy as f64);
-            let height = (TILE_SIZE * video.pix_width as f64 / distance) as u32;
+            // https://dev.opera.com/articles/3d-games-with-canvas-and-raycasting-part-2/
+            // FIXME way too much calculation here, a lot of this should be fixed
+            let dx = (tx as f64 + 0.5) * MAP_SCALE_W as f64 - game.player.x;
+            let dy = (ty as f64 + 0.5) * MAP_SCALE_H as f64 - game.player.y;
+            let distance = (dx*dx + dy*dy).sqrt();
+            let view_dist = TILE_SIZE * video.pix_width as f64;
+            let mut angle = dy.atan2(dx);
+            if angle < 0.0 {
+                // is this helpful?
+                angle += 2.0 * PI;
+            }
+            let offset = FIELD_OF_VIEW/2.0 - angle;
+            let ytemp = norm_angle(game.player.angle - offset);
+            let viewx = ytemp * video.pix_width as f64 / FIELD_OF_VIEW;
+
+            // let adj_distance = (distance * offset.cos()).abs();
+            let adj_distance = distance;
+            let height = (view_dist / adj_distance)as u32;
 
             let pos = statics
                 .binary_search_by_key(&height, |&(h, _, _)| h)
