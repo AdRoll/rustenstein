@@ -191,6 +191,10 @@ fn draw_actors(
         if let Some(shapenum) = game.static_objects.get(&(tx, ty)) {
             // https://dev.opera.com/articles/3d-games-with-canvas-and-raycasting-part-2/
             // FIXME way too much calculation here, a lot of this should be fixed
+
+            // FIXME this area has some bugs I can't yet figure out,
+            // the heights are not correct, there's some sprite sliding when camera rotats
+            // and --probably related-- the sprites are hidden before they are occluded by a wall
             let dx = (tx as f64 + 0.5) * MAP_SCALE_W as f64 - game.player.x;
             let dy = (ty as f64 + 0.5) * MAP_SCALE_H as f64 - game.player.y;
             let distance = (dx*dx + dy*dy).sqrt();
