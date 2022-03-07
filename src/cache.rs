@@ -1,5 +1,4 @@
 use crate::constants::{MAP_HEIGHT, MAP_WIDTH};
-use crate::map;
 use crate::map::Map;
 use std::fs;
 use std::path::Path;
@@ -198,8 +197,8 @@ impl Cache {
         &self.sounds[index]
     }
 
-    pub fn get_map(&self, episode: usize, level: usize) -> &Map {
-        &self.maps[level + 10 * episode]
+    pub fn get_map(&self, episode: usize, level: usize) -> Map {
+        self.maps[level + 10 * episode].clone()
     }
 }
 

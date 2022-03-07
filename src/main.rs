@@ -1,30 +1,19 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
-extern crate sdl2;
-
 use cache::Picture;
 use core::slice::Iter;
-use sdl2::event::Event;
-use sdl2::keyboard::Scancode;
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget, Texture};
-use sdl2::video::{Window, WindowContext};
-use sdl2::EventPump;
-use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
 
+use minifb::{Key, KeyRepeat, Window, WindowOptions};
+
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
 mod constants;
-mod input_manager;
 mod map;
 mod player;
 mod ray_caster;
 
-use crate::ray_caster::RayHit;
 use constants::*;
 
 const VGA_FLOOR_COLOR: usize = 0x19;
@@ -53,26 +42,20 @@ struct Opts {
     level: usize,
 }
 
-struct Video<'a> {
+struct Video {
     pub width: u32,
     pub height: u32,
     pub pix_width: u32,
     pub pix_height: u32,
     pub pix_center: u32,
-    pub scale_factor: u32,
+    pub scale: u32,
     pub color_map: ColorMap,
-    pub texture: Texture<'a>,
-    pub canvas: Canvas<Window>,
-}
-
-impl Video<'_> {
-    pub fn present(&mut self) {
-        self.canvas.copy(&self.texture, None, None).unwrap();
-        self.canvas.present();
-    }
+    pub buffer: Vec<u32>,
 }
 
 struct Game {
+    player: player::Player,
+    map: map::Map,
     episode: usize,
     level: usize,
     start_time: Instant,
@@ -81,186 +64,113 @@ struct Game {
 
 pub fn main() {
     let args = Opts::parse();
+    let mut game = Game::new(args.level);
+    let mut video = Video::new(args.scale);
+    let mut window = Window::new(
+        "rustenstein 3D",
+        video.width as usize,
+        video.height as usize,
+        WindowOptions::default(),
+    )
+    .unwrap();
 
-    // we only support episode 0 for now -- the shareware one
-    let game = Game {
-        episode: 0,
-        level: args.level - 1,
-        start_time: Instant::now(),
-        cache: cache::init(),
-    };
-    let sdl_context = sdl2::init().unwrap();
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    // Limit to max ~60 fps update rate
+    window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
-    // TODO these likely need to go to the game struct
-    let map = game.cache.get_map(game.episode, game.level);
-    let mut player = map.find_player();
+    show_title(&game, &mut video, &mut window);
 
-    let mut ray_caster = ray_caster::RayCaster::init(&sdl_context);
-
-    let width = BASE_WIDTH * args.scale;
-    let height = BASE_HEIGHT * args.scale;
-
-    let video_subsystem = sdl_context.video().unwrap();
-    let window = video_subsystem
-        .window("rustenstein 3D", width, height)
-        .position_centered()
-        .build()
-        .unwrap();
-
-    let canvas = window.into_canvas().build().unwrap();
-    let texture_creator = canvas.texture_creator();
-
-    let pix_width = width;
-    let pix_height = height - STATUS_LINES * args.scale;
-    let pix_center = pix_height / 2;
-
-    let mut video = Video {
-        scale_factor: args.scale,
-        width,
-        height,
-        pix_width,
-        pix_height,
-        pix_center,
-        color_map: build_color_map(),
-        canvas,
-        texture: texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, width, height)
-            .unwrap(),
-    };
-
-    show_title(&game, &mut video);
-    wait_for_key(&mut event_pump);
-
-    while process_input(&mut event_pump, &mut player).is_ok() {
-        let ray_hits = ray_caster.tick(pix_width, pix_height, &player, map);
-
-        // FIXME is this really necessary or can it be handled by sdl?
-        ::std::thread::sleep(Duration::new(0, 500_000_000u32 / 60));
-
-        draw_world(&game, &mut video, &ray_hits);
+    while process_input(&window, &mut game.player).is_ok() {
+        draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
 
-        video.present();
+        video.present(&mut window);
     }
 }
 
-// FIXME this is duplicated in input manager. move over there
-fn wait_for_key(event_pump: &mut EventPump) {
-    'running: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. } | Event::KeyDown { .. } => break 'running,
-                _ => {}
-            }
-        }
-    }
-}
-
-fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Result<(), String> {
-    for event in event_pump.poll_iter() {
-        if let Event::Quit { .. }
-        | Event::KeyDown {
-            scancode: Some(Scancode::Escape),
-            ..
-        } = event
-        {
-            return Err(String::from("Goodbye!"));
-        };
+fn process_input(window: &Window, player: &mut player::Player) -> Result<(), String> {
+    if !window.is_open() || window.is_key_pressed(Key::Escape, KeyRepeat::No) {
+        return Err(String::from("Goodbye!"));
     }
 
-    let keyboard = event_pump.keyboard_state();
-    if keyboard.is_scancode_pressed(Scancode::Left) {
+    if window.is_key_down(Key::Left) {
         player.turn_left();
     }
 
-    if keyboard.is_scancode_pressed(Scancode::Right) {
+    if window.is_key_down(Key::Right) {
         player.turn_right();
     }
 
-    if keyboard.is_scancode_pressed(Scancode::Up) {
+    if window.is_key_down(Key::Up) {
         player.move_forward();
     }
 
-    if keyboard.is_scancode_pressed(Scancode::Down) {
+    if window.is_key_down(Key::Down) {
         player.move_backward();
     }
 
     Ok(())
 }
 
-fn show_title(game: &Game, video: &mut Video) {
+fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
     let titlepic = game.cache.get_pic(cache::TITLEPIC);
-    video
-        .texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            draw_to_texture(buffer, pitch, 0, 0, titlepic, video.color_map);
-        })
-        .unwrap_or_default();
+    video.draw_texture(0, 0, titlepic);
 
-    video.present();
+    // wait for input
+    while window.get_keys_pressed(KeyRepeat::No).is_empty() {
+        video.present(window);
+    }
 }
 
-fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
-    video
-        .texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            // draw floor and ceiling colors
-            let floor = video.color_map[VGA_FLOOR_COLOR];
-            let ceiling = video.color_map[VGA_CEILING_COLORS[game.level]];
+fn draw_world(game: &Game, video: &mut Video) {
+    // TODO consider passing game as param here
+    let ray_hits =
+        ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
 
-            for x in 0..video.pix_width {
-                for y in 0..video.pix_height / 2 {
-                    let ceilings = darken_color(ceiling, video.pix_center - y, video.pix_center);
-                    put_pixel(buffer, pitch, x, y, ceilings);
-                }
-                for y in video.pix_height / 2..video.pix_height {
-                    let floors = darken_color(floor, y - video.pix_center, video.pix_center);
-                    put_pixel(buffer, pitch, x, y, floors);
-                }
+    // draw floor and ceiling
+    for x in 0..video.pix_width {
+        for y in 0..video.pix_height / 2 {
+            video.put_darkened_pixel(x, y, VGA_CEILING_COLORS[game.level], video.pix_center - y);
+        }
+        for y in video.pix_height / 2..video.pix_height {
+            video.put_darkened_pixel(x, y, VGA_FLOOR_COLOR, y - video.pix_center);
+        }
+    }
+
+    for x in 0..video.pix_width {
+        let hit = &ray_hits[x as usize];
+
+        // convert tile number to wall pic
+        // accept-the-mystery
+        let wallpic = if hit.horizontal {
+            (hit.tile - 1) * 2
+        } else {
+            (hit.tile - 1) * 2 + 1
+        };
+        let texture = game.cache.get_texture(wallpic as usize);
+
+        let current = ray_hits[x as usize].height as i32;
+
+        // tex_x is where the ray hit within the texture, indicates which part
+        // of the texture should be displayed for this given pixel column
+        // Need to multiply for width to get the correct row in the matrix
+        // for this column
+        let xoff = hit.tex_x * WALLPIC_WIDTH;
+
+        let step = WALLPIC_WIDTH as f64 / 2.0 / current as f64;
+        let mut ytex = 0.0;
+
+        for y in video.pix_center as i32 - current..video.pix_center as i32 + current {
+            if y >= 0 && y <= video.pix_height as i32 {
+                let source = ytex as usize + xoff;
+                let color_index = texture[source] as usize;
+
+                video.put_darkened_pixel(x, y as u32, color_index, current as u32);
             }
 
-            for x in 0..video.pix_width {
-                let hit = &ray_hits[x as usize];
-
-                // convert tile number to wall pic
-                // accept-the-mystery
-                let wallpic = if hit.horizontal {
-                    (hit.tile - 1) * 2
-                } else {
-                    (hit.tile - 1) * 2 + 1
-                };
-                let texture = game.cache.get_texture(wallpic as usize);
-
-                let current = ray_hits[x as usize].height as i32;
-
-                // tex_x is where the ray hit within the texture, indicates which part
-                // of the texture should be displayed for this given pixel column
-                // Need to multiply for width to get the correct row in the matrix
-                // for this column
-                let xoff = hit.tex_x * WALLPIC_WIDTH;
-
-                let step = WALLPIC_WIDTH as f64 / 2.0 / current as f64;
-                let mut ytex = 0.0;
-
-                for y in video.pix_center as i32 - current..video.pix_center as i32 + current {
-                    if y >= 0 && y <= video.pix_height as i32 {
-                        let source = ytex as usize + xoff;
-                        let color_index = texture[source] as usize;
-                        let mut color = video.color_map[color_index];
-
-                        // divide the color by a factor of the height to get a gradient shadow effect based on distance
-                        color = darken_color(color, current as u32, video.pix_center);
-
-                        put_pixel(buffer, pitch, x, y as u32, color);
-                    }
-
-                    ytex += step;
-                }
-            }
-        })
-        .unwrap();
+            ytex += step;
+        }
+    }
 }
 
 fn draw_weapon(game: &Game, video: &mut Video) {
@@ -268,8 +178,7 @@ fn draw_weapon(game: &Game, video: &mut Video) {
     let (weapon_shape, weapon_data) = game.cache.get_sprite(209);
 
     // TODO pass the shape num instead of pieces of the shape
-    simple_scale_shape(
-        video,
+    video.simple_scale_shape(
         weapon_shape.left_pix,
         weapon_shape.right_pix,
         &weapon_shape.dataofs,
@@ -279,191 +188,200 @@ fn draw_weapon(game: &Game, video: &mut Video) {
 
 fn draw_status(game: &Game, video: &mut Video) {
     let statuspic = game.cache.get_pic(cache::STATUSBARPIC);
-    video
-        .texture
-        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            draw_to_texture(
-                buffer,
-                pitch,
-                0,
-                video.pix_height,
-                statuspic,
-                video.color_map,
-            );
+    video.draw_texture(0, video.pix_height, statuspic);
 
-            let facepic = match game.start_time.elapsed().as_secs() % 3 {
-                0 => game.cache.get_pic(cache::FACE1APIC),
-                1 => game.cache.get_pic(cache::FACE1BPIC),
-                2 => game.cache.get_pic(cache::FACE1CPIC),
-                _ => unreachable!(),
-            };
+    let facepic = match game.start_time.elapsed().as_secs() % 3 {
+        0 => game.cache.get_pic(cache::FACE1APIC),
+        1 => game.cache.get_pic(cache::FACE1BPIC),
+        2 => game.cache.get_pic(cache::FACE1CPIC),
+        _ => unreachable!(),
+    };
 
-            let shift_x = video.pix_width / 2 - facepic.width * video.scale_factor;
-            let shift_y = video.pix_height + facepic.height * video.scale_factor / 8;
-            draw_to_texture(buffer, pitch, shift_x, shift_y, facepic, video.color_map);
-        })
-        .unwrap_or_default();
+    let shift_x = video.pix_width / 2 - facepic.width * video.scale;
+    let shift_y = video.pix_height + facepic.height * video.scale / 8;
+    video.draw_texture(shift_x, shift_y, facepic);
 }
 
-fn darken_color(color: (u8, u8, u8), lightness: u32, max: u32) -> (u8, u8, u8) {
-    let (r, g, b) = color;
-    let factor = std::cmp::min(lightness, max) as f64 / max as f64 / DARKNESS;
-    let rs = (r as f64 * factor) as u8;
-    let gs = (g as f64 * factor) as u8;
-    let bs = (b as f64 * factor) as u8;
-    (rs, gs, bs)
-}
-
-// temporarily allowing too many arguments (default max is 7, we got 9)
-// this function should probably be refactored
-#[allow(clippy::too_many_arguments)]
-fn simple_scale_shape(
-    video: &mut Video,
-    left_pix: u16,
-    right_pix: u16,
-    dataofs: &[u16],
-    shape_bytes: &[u8],
-) {
-    video
-        .texture
-        .with_lock(None, |vbuf: &mut [u8], pitch: usize| {
-            let sprite_scale_factor = 2;
-            let xcenter = video.pix_width / 2;
-            let height = video.pix_height + 1;
-
-            let scale = height >> 1;
-            let pixheight = scale * sprite_scale_factor;
-            let actx = xcenter - scale;
-            let upperedge = video.pix_height / 2 - scale;
-            // cmdptr=(word *) shape->dataofs;
-            // cmdptr = iter(shape.dataofs)
-            let mut cmdptr = dataofs.iter();
-
-            let mut i = left_pix;
-            let mut pixcnt = i as u32 * pixheight;
-            let mut rpix = (pixcnt >> 6) + actx;
-
-            while i <= right_pix {
-                let mut lpix = rpix;
-                if lpix >= video.pix_width {
-                    break;
-                }
-
-                pixcnt += pixheight;
-                rpix = (pixcnt >> 6) + actx;
-
-                if lpix != rpix && rpix > 0 {
-                    if rpix > video.pix_width {
-                        rpix = video.pix_width;
-                        i = right_pix + 1;
-                    }
-                    let read_word = |line: &mut Iter<u8>| {
-                        u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
-                    };
-                    let read_word_signed = |line: &mut Iter<u8>| {
-                        i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
-                    };
-
-                    let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
-                    while lpix < rpix {
-                        let mut line = cline.iter();
-                        let mut endy = read_word(&mut line);
-                        while endy > 0 {
-                            endy >>= 1;
-                            let newstart = read_word_signed(&mut line);
-                            let starty = read_word(&mut line) >> 1;
-                            let mut j = starty;
-                            let mut ycnt = j as u32 * pixheight;
-                            let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
-
-                            let mut vmem_index: usize = if screndy < 0 {
-                                lpix as usize * 3
-                            } else {
-                                screndy as usize * pitch + lpix as usize * 3
-                            };
-
-                            while j < endy {
-                                let mut scrstarty = screndy;
-                                ycnt += pixheight;
-                                screndy = (ycnt >> 6) as i32 + upperedge as i32;
-                                if scrstarty != screndy && screndy > 0 {
-                                    let index = newstart + j as i16;
-                                    let col = if index >= 0 {
-                                        shape_bytes[index as usize]
-                                    } else {
-                                        0
-                                    };
-                                    if scrstarty < 0 {
-                                        scrstarty = 0;
-                                    }
-                                    if screndy > video.pix_height as i32 {
-                                        screndy = video.pix_height as i32;
-                                        j = endy;
-                                    }
-
-                                    while scrstarty < screndy {
-                                        // FIXME can put pixel be used here instead?
-                                        let (r, g, b) = video.color_map[col as usize];
-                                        vbuf[vmem_index as usize] = r;
-                                        vbuf[vmem_index as usize + 1] = g;
-                                        vbuf[vmem_index as usize + 2] = b;
-                                        vmem_index += pitch;
-                                        scrstarty += 1;
-                                    }
-                                }
-                                j += 1;
-                            }
-                            endy = read_word(&mut line);
-                        }
-                        lpix += 1;
-                    }
-                }
-                i += 1;
-            }
-        })
-        .unwrap_or_default();
-}
-
-fn draw_to_texture(
-    buffer: &mut [u8],
-    pitch: usize,
-    shift_x: u32,
-    shift_y: u32,
-    pic: &Picture,
-    color_map: ColorMap,
-) {
-    // different from the window size
-    let mut scj = 0;
-    for y in 0..pic.height {
-        let mut sci = 0;
-        for x in 0..pic.width {
-            let source_index =
-                (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
-            let color = pic.data[source_index as usize];
-            for i in 0..3 {
-                for j in 0..3 {
-                    put_pixel(
-                        buffer,
-                        pitch,
-                        sci + j + shift_x,
-                        scj + i + shift_y,
-                        color_map[color as usize],
-                    );
-                }
-            }
-
-            sci += 3
+impl Game {
+    pub fn new(level: usize) -> Self {
+        let level = level - 1;
+        let cache = cache::init();
+        let map = cache.get_map(0, level);
+        let player = map.find_player();
+        Self {
+            cache,
+            map,
+            player,
+            // we only support episode 0 for now -- the shareware one
+            episode: 0,
+            level,
+            start_time: Instant::now(),
         }
-        scj += 3
     }
 }
 
-fn put_pixel(buffer: &mut [u8], pitch: usize, x: u32, y: u32, color: (u8, u8, u8)) {
-    let (r, g, b) = color;
-    let offset = y as usize * pitch + x as usize * 3;
-    buffer[offset] = r;
-    buffer[offset + 1] = g;
-    buffer[offset + 2] = b;
+impl Video {
+    pub fn new(scale: u32) -> Self {
+        let width = BASE_WIDTH * scale;
+        let height = BASE_HEIGHT * scale;
+        let pix_width = width;
+        let pix_height = height - STATUS_LINES * scale;
+        let pix_center = pix_height / 2;
+        let buffer: Vec<u32> = vec![0; (width * height) as usize];
+
+        Self {
+            scale,
+            width,
+            height,
+            pix_width,
+            pix_height,
+            pix_center,
+            color_map: build_color_map(),
+            buffer,
+        }
+    }
+
+    pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+        let (r, g, b) = (r as u32, g as u32, b as u32);
+
+        // convert rgb to u32
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
+    pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
+        let offset = (y * self.width + x) as usize;
+        let (r, g, b) = self.color_map[color_index as usize];
+
+        // apply a darkness factor based on distance from the center
+        let factor =
+            std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
+        let r = (r as f64 * factor) as u8 as u32;
+        let g = (g as f64 * factor) as u8 as u32;
+        let b = (b as f64 * factor) as u8 as u32;
+
+        self.buffer[offset] = (r << 16) | (g << 8) | b;
+    }
+
+    pub fn present(&self, window: &mut Window) {
+        window
+            .update_with_buffer(&self.buffer, self.width as usize, self.height as usize)
+            .unwrap();
+    }
+
+    pub fn draw_texture(&mut self, shift_x: u32, shift_y: u32, pic: &Picture) {
+        let mut scj = 0;
+        for y in 0..pic.height {
+            let mut sci = 0;
+            for x in 0..pic.width {
+                let source_index =
+                    (y * (pic.width >> 2) + (x >> 2)) + (x & 3) * (pic.width >> 2) * pic.height;
+                let color = pic.data[source_index as usize];
+                for i in 0..self.scale {
+                    for j in 0..self.scale {
+                        self.put_pixel(sci + j + shift_x, scj + i + shift_y, color as usize);
+                    }
+                }
+
+                sci += self.scale
+            }
+            scj += self.scale
+        }
+    }
+
+    fn simple_scale_shape(
+        &mut self,
+        left_pix: u16,
+        right_pix: u16,
+        dataofs: &[u16],
+        shape_bytes: &[u8],
+    ) {
+        let sprite_scale_factor = 2;
+        let xcenter = self.pix_width / 2;
+        let height = self.pix_height + 1;
+
+        let scale = height >> 1;
+        let pixheight = scale * sprite_scale_factor;
+        let actx = xcenter - scale;
+        let upperedge = self.pix_height / 2 - scale;
+        // cmdptr=(word *) shape->dataofs;
+        // cmdptr = iter(shape.dataofs)
+        let mut cmdptr = dataofs.iter();
+
+        let mut i = left_pix;
+        let mut pixcnt = i as u32 * pixheight;
+        let mut rpix = (pixcnt >> 6) + actx;
+
+        while i <= right_pix {
+            let mut lpix = rpix;
+            if lpix >= self.pix_width {
+                break;
+            }
+
+            pixcnt += pixheight;
+            rpix = (pixcnt >> 6) + actx;
+
+            if lpix != rpix && rpix > 0 {
+                if rpix > self.pix_width {
+                    rpix = self.pix_width;
+                    i = right_pix + 1;
+                }
+                let read_word = |line: &mut Iter<u8>| {
+                    u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+                let read_word_signed = |line: &mut Iter<u8>| {
+                    i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+
+                let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
+                while lpix < rpix {
+                    let mut line = cline.iter();
+                    let mut endy = read_word(&mut line);
+                    while endy > 0 {
+                        endy >>= 1;
+                        let newstart = read_word_signed(&mut line);
+                        let starty = read_word(&mut line) >> 1;
+                        let mut j = starty;
+                        let mut ycnt = j as u32 * pixheight;
+                        let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+
+                        let mut pixy = screndy as u32;
+                        while j < endy {
+                            let mut scrstarty = screndy;
+                            ycnt += pixheight;
+                            screndy = (ycnt >> 6) as i32 + upperedge as i32;
+                            if scrstarty != screndy && screndy > 0 {
+                                let index = newstart + j as i16;
+                                let col = if index >= 0 {
+                                    shape_bytes[index as usize]
+                                } else {
+                                    0
+                                };
+                                if scrstarty < 0 {
+                                    scrstarty = 0;
+                                }
+                                if screndy > self.pix_height as i32 {
+                                    screndy = self.pix_height as i32;
+                                    j = endy;
+                                }
+
+                                while scrstarty < screndy {
+                                    self.put_pixel(lpix, pixy, col as usize);
+                                    pixy += 1;
+                                    scrstarty += 1;
+                                }
+                            }
+                            j += 1;
+                        }
+                        endy = read_word(&mut line);
+                    }
+                    lpix += 1;
+                }
+            }
+            i += 1;
+        }
+    }
 }
 
 /// Returns an array of colors that maps indexes as used by wolf3d graphics

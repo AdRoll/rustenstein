@@ -1,6 +1,6 @@
 use crate::constants::*;
 use crate::player;
-use std::{fmt, fs};
+use std::fmt;
 
 #[derive(Copy, Clone)]
 pub enum Tile {
@@ -24,7 +24,7 @@ pub enum Actor {
     PushWall,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Map {
     plane0: [[u16; MAP_HEIGHT]; MAP_WIDTH],
     plane1: [[u16; MAP_HEIGHT]; MAP_WIDTH],
