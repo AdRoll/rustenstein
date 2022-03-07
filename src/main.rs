@@ -197,20 +197,15 @@ fn draw_actors(
             // and --probably related-- the sprites are hidden before they are occluded by a wall
             let dx = (tx as f64 + 0.5) * MAP_SCALE_W as f64 - game.player.x;
             let dy = (ty as f64 + 0.5) * MAP_SCALE_H as f64 - game.player.y;
-            let distance = (dx*dx + dy*dy).sqrt();
             let view_dist = TILE_SIZE * video.pix_width as f64;
-            let mut angle = dy.atan2(dx);
-            if angle < 0.0 {
-                // is this helpful?
-                angle += 2.0 * PI;
-            }
+
+            let angle = dy.atan2(dx);
             let offset = FIELD_OF_VIEW/2.0 - angle;
             let ytemp = norm_angle(game.player.angle - offset);
             let viewx = ytemp * video.pix_width as f64 / FIELD_OF_VIEW;
 
-            // let adj_distance = (distance * offset.cos()).abs();
-            let adj_distance = distance;
-            let height = (view_dist / adj_distance)as u32;
+            let distance = dx * offset.cos() - dy * offset.sin();
+            let height = (view_dist / distance)as u32;
 
             let pos = statics
                 .binary_search_by_key(&height, |&(h, _, _)| h)
