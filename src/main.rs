@@ -1,9 +1,15 @@
 #![allow(dead_code)]
 use cache::Picture;
 use core::slice::Iter;
-use std::time::Instant;
+use map::Actor;
+use ray_caster::RayHit;
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use clap::Parser;
+use std::f64::consts::PI;
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
@@ -60,6 +66,7 @@ struct Game {
     level: usize,
     start_time: Instant,
     cache: cache::Cache,
+    static_objects: HashMap<(usize, usize), u16>,
 }
 
 pub fn main() {
@@ -80,7 +87,11 @@ pub fn main() {
     show_title(&game, &mut video, &mut window);
 
     while process_input(&window, &mut game.player).is_ok() {
-        draw_world(&game, &mut video);
+        let (ray_hits, visible_tiles) =
+            ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
+
+        draw_world(&game, &mut video, &ray_hits);
+        draw_actors(&game, &mut video, &ray_hits, &visible_tiles);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
 
@@ -122,11 +133,7 @@ fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
     }
 }
 
-fn draw_world(game: &Game, video: &mut Video) {
-    // TODO consider passing game as param here
-    let ray_hits =
-        ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
-
+fn draw_world(game: &Game, video: &mut Video, ray_hits: &[RayHit]) {
     // draw floor and ceiling
     for x in 0..video.pix_width {
         for y in 0..video.pix_height / 2 {
@@ -173,11 +180,61 @@ fn draw_world(game: &Game, video: &mut Video) {
     }
 }
 
+fn draw_actors(
+    game: &Game,
+    video: &mut Video,
+    ray_hits: &[RayHit],
+    visible: &HashSet<(usize, usize)>,
+) {
+    let mut statics = Vec::new();
+    for &(tx, ty) in visible {
+        if let Some(shapenum) = game.static_objects.get(&(tx, ty)) {
+            // https://dev.opera.com/articles/3d-games-with-canvas-and-raycasting-part-2/
+            // FIXME way too much calculation here, a lot of this should be fixed
+
+            // FIXME this area has some bugs I can't yet figure out,
+            // the heights are not correct, there's some sprite sliding when camera rotats
+            // and --probably related-- the sprites are hidden before they are occluded by a wall
+            let dx = (tx as f64 + 0.5) * MAP_SCALE_W as f64 - game.player.x;
+            let dy = (ty as f64 + 0.5) * MAP_SCALE_H as f64 - game.player.y;
+            let view_dist = TILE_SIZE * video.pix_width as f64;
+
+            let angle = dy.atan2(dx);
+            let offset = FIELD_OF_VIEW/2.0 - angle;
+            let ytemp = norm_angle(game.player.angle - offset);
+            let viewx = ytemp * video.pix_width as f64 / FIELD_OF_VIEW;
+
+            let distance = dx * offset.cos() - dy * offset.sin();
+            let height = (view_dist / distance)as u32;
+
+            let pos = statics
+                .binary_search_by_key(&height, |&(h, _, _)| h)
+                .unwrap_or_else(|x| x);
+            statics.insert(pos, (height, viewx, shapenum));
+        }
+    }
+
+    for (height, viewx, shapenum) in statics {
+        let (shape, data) = game.cache.get_sprite(*shapenum as usize);
+
+        // TODO pass the shape num instead of pieces of the shape?
+        video.scale_shape(
+            viewx as u32,
+            height,
+            shape.left_pix,
+            shape.right_pix,
+            &shape.dataofs,
+            data,
+            ray_hits,
+        );
+    }
+}
+
 fn draw_weapon(game: &Game, video: &mut Video) {
     // FIXME use a constant for that 209
-    let (weapon_shape, weapon_data) = game.cache.get_sprite(209);
+    let (weapon_shape, weapon_data) = game.cache.get_sprite(230);
 
-    // TODO pass the shape num instead of pieces of the shape
+    // TODO pass the shape num instead of pieces of the shape?
     video.simple_scale_shape(
         weapon_shape.left_pix,
         weapon_shape.right_pix,
@@ -208,6 +265,16 @@ impl Game {
         let cache = cache::init();
         let map = cache.get_map(0, level);
         let player = map.find_player();
+
+        let mut static_objects = HashMap::new();
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                if let Some(Actor::Static(shapenum)) = map.actor_at(x, y) {
+                    static_objects.insert((x, y), shapenum);
+                }
+            }
+        }
+
         Self {
             cache,
             map,
@@ -216,6 +283,7 @@ impl Game {
             episode: 0,
             level,
             start_time: Instant::now(),
+            static_objects,
         }
     }
 }
@@ -375,6 +443,107 @@ impl Video {
                             j += 1;
                         }
                         endy = read_word(&mut line);
+                    }
+                    lpix += 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    // FIXME this is almost identical to simple_scale_shape, except for the height check.
+    // refactor to reuse the code
+    fn scale_shape(
+        &mut self,
+        xcenter: u32,
+        height: u32,
+        left_pix: u16,
+        right_pix: u16,
+        dataofs: &[u16],
+        shape_bytes: &[u8],
+        ray_hits: &[RayHit],
+    ) {
+        if height > self.pix_center {
+            return;
+        }
+
+        let sprite_scale_factor = 2;
+        let scale = height;
+        let pixheight = scale * sprite_scale_factor;
+        let actx = xcenter - scale;
+        let upperedge = self.pix_height / 2 - scale;
+        // cmdptr=(word *) shape->dataofs;
+        // cmdptr = iter(shape.dataofs)
+        let mut cmdptr = dataofs.iter();
+
+        let mut i = left_pix;
+        let mut pixcnt = i as u32 * pixheight;
+        let mut rpix = (pixcnt >> 6) + actx;
+
+        while i <= right_pix {
+            let mut lpix = rpix;
+            if lpix >= self.pix_width {
+                break;
+            }
+
+            pixcnt += pixheight;
+            rpix = (pixcnt >> 6) + actx;
+
+            if lpix != rpix && rpix > 0 {
+                if rpix > self.pix_width {
+                    rpix = self.pix_width;
+                    i = right_pix + 1;
+                }
+                let read_word = |line: &mut Iter<u8>| {
+                    u16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+                let read_word_signed = |line: &mut Iter<u8>| {
+                    i16::from_le_bytes([*line.next().unwrap_or(&0), *line.next().unwrap_or(&0)])
+                };
+
+                let cline = &shape_bytes[*cmdptr.next().unwrap() as usize..];
+                while lpix < rpix {
+                    if ray_hits[lpix as usize].height <= height {
+                        let mut line = cline.iter();
+                        let mut endy = read_word(&mut line);
+                        while endy > 0 {
+                            endy >>= 1;
+                            let newstart = read_word_signed(&mut line);
+                            let starty = read_word(&mut line) >> 1;
+                            let mut j = starty;
+                            let mut ycnt = j as u32 * pixheight;
+                            let mut screndy: i32 = (ycnt >> 6) as i32 + upperedge as i32;
+
+                            let mut pixy = screndy as u32;
+                            while j < endy {
+                                let mut scrstarty = screndy;
+                                ycnt += pixheight;
+                                screndy = (ycnt >> 6) as i32 + upperedge as i32;
+                                if scrstarty != screndy && screndy > 0 {
+                                    let index = newstart + j as i16;
+                                    let col = if index >= 0 {
+                                        shape_bytes[index as usize]
+                                    } else {
+                                        0
+                                    };
+                                    if scrstarty < 0 {
+                                        scrstarty = 0;
+                                    }
+                                    if screndy > self.pix_height as i32 {
+                                        screndy = self.pix_height as i32;
+                                        j = endy;
+                                    }
+
+                                    while scrstarty < screndy {
+                                        self.put_darkened_pixel(lpix, pixy, col as usize, height);
+                                        pixy += 1;
+                                        scrstarty += 1;
+                                    }
+                                }
+                                j += 1;
+                            }
+                            endy = read_word(&mut line);
+                        }
                     }
                     lpix += 1;
                 }

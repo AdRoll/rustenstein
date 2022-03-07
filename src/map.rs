@@ -18,9 +18,8 @@ pub enum Direction {
 
 pub enum Actor {
     Player(Direction),
-    Enemy, // TODO differentiate enemy types
-    Item,  // TODO differentiate item types
-    DeadGuard,
+    Enemy(u16),  // TODO differentiate enemy types
+    Static(u16), // TODO differentiate item types
     PushWall,
 }
 
@@ -61,16 +60,17 @@ impl Map {
         }
     }
 
-    pub fn actor_at(&self, x: u8, y: u8) -> Option<Actor> {
-        match self.plane1[x as usize][y as usize] {
+    pub fn actor_at(&self, x: usize, y: usize) -> Option<Actor> {
+        match self.plane1[x][y] {
             19 => Some(Actor::Player(Direction::North)),
             20 => Some(Actor::Player(Direction::East)),
             21 => Some(Actor::Player(Direction::South)),
             22 => Some(Actor::Player(Direction::West)),
-            n if (23..=72).contains(&n) => Some(Actor::Item),
+            n if (23..=72).contains(&n) => Some(Actor::Static(n)),
+            // FIXME why - 8 ?
+            124 => Some(Actor::Static(124 - 8)), //dead guard
             98 => Some(Actor::PushWall),
-            124 => Some(Actor::DeadGuard),
-            n if n >= 108 => Some(Actor::Enemy),
+            n if n >= 108 => Some(Actor::Enemy(n)),
             _ => None,
         }
     }
@@ -94,9 +94,9 @@ impl Map {
         }
     }
 
-    pub fn find_player_start(&self) -> (u8, u8, Direction) {
-        for x in 0..MAP_WIDTH as u8 {
-            for y in 0..MAP_HEIGHT as u8 {
+    fn find_player_start(&self) -> (usize, usize, Direction) {
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
                 if let Some(Actor::Player(direction)) = self.actor_at(x, y) {
                     return (x, y, direction);
                 }
