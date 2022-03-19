@@ -81,7 +81,7 @@ pub fn main() {
     show_title(&game, &mut video, &mut window);
     let map = &game.map;
 
-    while process_input(&window, &mut game.player, &map).is_ok() {
+    while process_input(&window, &mut game.player, map).is_ok() {
         draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);

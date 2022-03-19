@@ -35,39 +35,39 @@ impl Player {
         │o│
         └─┘
         */
-        let is_collision_slide_x = match map.tile_at(
-            (new_map_x + collision_offset_x) as u8,
-            (new_map_y - collision_offset_y) as u8,
-        ) {
-            Tile::Wall(_) => true,
-            _ => false,
-        };
+        let is_collision_slide_x = matches!(
+            map.tile_at(
+                (new_map_x + collision_offset_x) as u8,
+                (new_map_y - collision_offset_y) as u8,
+            ),
+            Tile::Wall(_)
+        );
 
         /* ■ - player angle, ╬ - checked collision vertex of player's box, o - player core position
         ■─┐
         │o│
         ╬─┘
         */
-        let is_collision_slide_y = match map.tile_at(
-            (new_map_x - collision_offset_x) as u8,
-            (new_map_y + collision_offset_y) as u8,
-        ) {
-            Tile::Wall(_) => true,
-            _ => false,
-        };
+        let is_collision_slide_y = matches!(
+            map.tile_at(
+                (new_map_x - collision_offset_x) as u8,
+                (new_map_y + collision_offset_y) as u8,
+            ),
+            Tile::Wall(_)
+        );
 
         /* ■ - player angle and checked collision vertex of player's box, o - player core position
         ┌─■
         │o│
         └─┘
         */
-        let is_collision_both = match map.tile_at(
-            (new_map_x + collision_offset_x) as u8,
-            (new_map_y + collision_offset_y) as u8,
-        ) {
-            Tile::Wall(_) => true,
-            _ => false,
-        };
+        let is_collision_both = matches!(
+            map.tile_at(
+                (new_map_x + collision_offset_x) as u8,
+                (new_map_y + collision_offset_y) as u8,
+            ),
+            Tile::Wall(_)
+        );
 
         // keep moving/sliding until only both axis are colliding
         if is_collision_both && !is_collision_slide_x && !is_collision_slide_y {
