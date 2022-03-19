@@ -79,7 +79,7 @@ pub fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
     show_title(&game, &mut video, &mut window);
-    let map = game.cache.get_map(game.episode, game.level);
+    let map = &game.map;
 
     while process_input(&window, &mut game.player, &map).is_ok() {
         draw_world(&game, &mut video);
