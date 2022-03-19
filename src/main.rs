@@ -4,6 +4,7 @@ extern crate sdl2;
 
 use cache::Picture;
 use core::slice::Iter;
+use map::Map;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
 use sdl2::pixels::PixelFormatEnum;
@@ -11,6 +12,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, RenderTarget, Texture};
 use sdl2::video::{Window, WindowContext};
 use sdl2::EventPump;
+use std::f64::consts::PI;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -132,7 +134,7 @@ pub fn main() {
     show_title(&game, &mut video);
     wait_for_key(&mut event_pump);
 
-    while process_input(&mut event_pump, &mut player).is_ok() {
+    while process_input(&mut event_pump, &mut player, &map).is_ok() {
         let ray_hits = ray_caster.tick(pix_width, pix_height, &player, map);
 
         // FIXME is this really necessary or can it be handled by sdl?
@@ -158,7 +160,11 @@ fn wait_for_key(event_pump: &mut EventPump) {
     }
 }
 
-fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Result<(), String> {
+fn process_input(
+    event_pump: &mut EventPump,
+    player: &mut player::Player,
+    map: &map::Map,
+) -> Result<(), String> {
     for event in event_pump.poll_iter() {
         if let Event::Quit { .. }
         | Event::KeyDown {
@@ -179,12 +185,44 @@ fn process_input(event_pump: &mut EventPump, player: &mut player::Player) -> Res
         player.turn_right();
     }
 
+    let mut is_moving_forward = false;
+    let mut is_moving_backward = false;
+    let mut is_moving_sidaways = false;
     if keyboard.is_scancode_pressed(Scancode::Up) {
-        player.move_forward();
+        is_moving_forward = true;
+        player.move_angle = player.view_angle;
     }
 
     if keyboard.is_scancode_pressed(Scancode::Down) {
-        player.move_backward();
+        is_moving_backward = true;
+        player.move_angle = player.view_angle - PI;
+    }
+
+    if keyboard.is_scancode_pressed(Scancode::Comma) {
+        is_moving_sidaways = true;
+        if is_moving_forward {
+            player.move_angle += PI / 4.0;
+        } else if is_moving_backward {
+            player.move_angle -= PI / 4.0;
+        } else {
+            // player is moving only sideways
+            player.move_angle = player.view_angle + PI / 2.0;
+        }
+    }
+
+    if keyboard.is_scancode_pressed(Scancode::Period) {
+        is_moving_sidaways = true;
+        if is_moving_forward {
+            player.move_angle -= PI / 4.0;
+        } else if is_moving_backward {
+            player.move_angle += PI / 4.0;
+        } else {
+            // player is moving only sideways
+            player.move_angle = player.view_angle - PI / 2.0;
+        }
+    }
+    if is_moving_sidaways || is_moving_forward || is_moving_backward {
+        player.move_player(map)
     }
 
     Ok(())

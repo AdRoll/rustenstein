@@ -87,8 +87,8 @@ fn draw_player<T: RenderTarget>(canvas: &mut Canvas<T>, player: &Player) {
     canvas.set_draw_color(Color::RGB(255, 255, 0));
     let x = player.x.round() as i32;
     let y = player.y.round() as i32;
-    let nx = (player.x + player.angle.sin() * PLAYER_LEN).round() as i32;
-    let ny = (player.y + player.angle.cos() * PLAYER_LEN).round() as i32;
+    let nx = (player.x + player.view_angle.sin() * PLAYER_LEN).round() as i32;
+    let ny = (player.y + player.view_angle.cos() * PLAYER_LEN).round() as i32;
     canvas
         .fill_rect(Rect::new(
             x - PLAYER_DIAM,
@@ -161,7 +161,7 @@ fn cast_ray_v<T: RenderTarget>(
     player: &Player,
     ray_offset: f64,
 ) -> (f64, f64, f64, u16) {
-    let ray_angle = norm_angle(player.angle + ray_offset);
+    let ray_angle = norm_angle(player.view_angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
     if ray_angle == ANGLE_LEFT || ray_angle == ANGLE_RIGHT {
@@ -195,7 +195,7 @@ fn cast_ray_h<T: RenderTarget>(
     player: &Player,
     ray_offset: f64,
 ) -> (f64, f64, f64, u16) {
-    let ray_angle = norm_angle(player.angle + ray_offset);
+    let ray_angle = norm_angle(player.view_angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
     if ray_angle == ANGLE_UP || ray_angle == ANGLE_DOWN {
