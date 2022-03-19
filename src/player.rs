@@ -1,12 +1,7 @@
-use std::f64::consts::PI;
-use std::iter::Enumerate;
-
-use sdl2::libc::abs;
-
 use crate::constants;
 use crate::constants::{MAP_SCALE_H, MAP_SCALE_W};
 use crate::map;
-use crate::map::{Direction, Map, Tile};
+use crate::map::Tile;
 
 const ROTATE_SPEED: f64 = 0.2;
 const MOVE_SPEED: f64 = 2.5;
