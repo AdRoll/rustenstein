@@ -2,6 +2,7 @@ use crate::constants;
 use crate::constants::{MAP_SCALE_H, MAP_SCALE_W};
 use crate::map;
 use crate::map::Tile;
+use std::f64::consts::PI;
 
 const ROTATE_SPEED: f64 = 0.2;
 const MOVE_SPEED: f64 = 2.5;
@@ -12,12 +13,69 @@ pub struct Player {
     pub y: f64,
     pub view_angle: f64,
     pub move_angle: f64,
+    pub is_moving_forward: bool,
+    pub is_moving_backward: bool,
+    pub is_moving_sideways: bool,
 }
 
 impl Player {
+    pub fn turn_left(&mut self) {
+        self.view_angle += ROTATE_SPEED;
+        self.view_angle = constants::norm_angle(self.view_angle);
+    }
+
+    pub fn turn_right(&mut self) {
+        self.view_angle -= ROTATE_SPEED;
+        self.view_angle = constants::norm_angle(self.view_angle);
+    }
+
+    pub fn set_walk_forward(&mut self) {
+        self.is_moving_forward = true;
+        self.move_angle = self.view_angle;
+    }
+
+    pub fn set_walk_backward(&mut self) {
+        self.is_moving_backward = true;
+        self.move_angle = self.view_angle - PI;
+    }
+
+    pub fn set_walk_left(&mut self) {
+        self.set_walk_sideways(PI / 2.0); // 90 degrees
+    }
+
+    pub fn set_walk_right(&mut self) {
+        self.set_walk_sideways(-PI / 2.0); // -90 degrees
+    }
+
+    /// Moves player across the map and prevents stepping into walls.
+    pub fn start_walk(&mut self, map: &map::Map) {
+        if self.is_moving_sideways || self.is_moving_forward || self.is_moving_backward {
+            self.walk(map);
+            self.clear_walk();
+        }
+    }
+
+    /// Sets walking angle for sideways move in Rads
+    fn set_walk_sideways(&mut self, angle_rad: f64) {
+        if self.is_moving_forward {
+            self.move_angle += angle_rad / 2.0;
+        } else if self.is_moving_backward {
+            self.move_angle -= angle_rad / 2.0;
+        } else {
+            // player is moving only sideways
+            self.move_angle = self.view_angle + angle_rad;
+        }
+    }
+
+    fn clear_walk(&mut self) {
+        self.is_moving_forward = false;
+        self.is_moving_backward = false;
+        self.is_moving_sideways = false;
+    }
+
     /// Moves player across the map and prevents stepping into walls.
     /// Player collision box is a square. Its vertices are checked for collision with nearby walls.
-    pub fn move_player(&mut self, map: &map::Map) {
+    fn walk(&mut self, map: &map::Map) {
         // new player position (player scale)
         let new_x = self.x + self.move_angle.sin() * MOVE_SPEED;
         let new_y = self.y + self.move_angle.cos() * MOVE_SPEED;
@@ -75,7 +133,7 @@ impl Player {
             let mut whole_x = new_map_x + collision_offset_x;
             let mut whole_y = new_map_y + collision_offset_y;
 
-            // compensate for different view angles
+            // compensate for different view angles (degrees)
             if collision_offset_x > 0.0 {
                 // 270 - 0 - 90
                 whole_x = whole_x.floor();
@@ -108,15 +166,5 @@ impl Player {
                 self.y = new_y;
             }
         }
-    }
-
-    pub fn turn_left(&mut self) {
-        self.view_angle += ROTATE_SPEED;
-        self.view_angle = constants::norm_angle(self.view_angle);
-    }
-
-    pub fn turn_right(&mut self) {
-        self.view_angle -= ROTATE_SPEED;
-        self.view_angle = constants::norm_angle(self.view_angle);
     }
 }

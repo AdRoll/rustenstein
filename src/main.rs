@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 use cache::Picture;
 use core::slice::Iter;
-use std::f64::consts::PI;
 use std::time::Instant;
 
 use clap::Parser;
@@ -107,45 +106,23 @@ fn process_input(
         player.turn_right();
     }
 
-    let mut is_moving_forward = false;
-    let mut is_moving_backward = false;
-    let mut is_moving_sidaways = false;
     if window.is_key_down(Key::Up) {
-        is_moving_forward = true;
-        player.move_angle = player.view_angle;
+        player.set_walk_forward();
     }
 
     if window.is_key_down(Key::Down) {
-        is_moving_backward = true;
-        player.move_angle = player.view_angle - PI;
+        player.set_walk_backward();
     }
 
     if window.is_key_down(Key::Comma) {
-        is_moving_sidaways = true;
-        if is_moving_forward {
-            player.move_angle += PI / 4.0;
-        } else if is_moving_backward {
-            player.move_angle -= PI / 4.0;
-        } else {
-            // player is moving only sideways
-            player.move_angle = player.view_angle + PI / 2.0;
-        }
+        player.set_walk_left();
     }
 
     if window.is_key_down(Key::Period) {
-        is_moving_sidaways = true;
-        if is_moving_forward {
-            player.move_angle -= PI / 4.0;
-        } else if is_moving_backward {
-            player.move_angle += PI / 4.0;
-        } else {
-            // player is moving only sideways
-            player.move_angle = player.view_angle - PI / 2.0;
-        }
+        player.set_walk_right();
     }
-    if is_moving_sidaways || is_moving_forward || is_moving_backward {
-        player.move_player(map)
-    }
+
+    player.start_walk(map);
 
     Ok(())
 }

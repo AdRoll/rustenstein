@@ -92,6 +92,9 @@ impl Map {
             y: player_y,
             view_angle: player_angle,
             move_angle: player_angle,
+            is_moving_forward: false,
+            is_moving_backward: false,
+            is_moving_sideways: false,
         }
     }
 
