@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::player::{SideMovement, StraightMovement, TurnMovement};
 use cache::Picture;
 use core::slice::Iter;
 use std::time::Instant;
@@ -98,31 +99,39 @@ fn process_input(
         return Err(String::from("Goodbye!"));
     }
 
+    let mut straight: Option<StraightMovement> = None;
+    let mut side: Option<SideMovement> = None;
+    let mut turn: Option<TurnMovement> = None;
+    let mut run = false;
+    if window.is_key_down(Key::LeftShift) {
+        run = true;
+    }
+
     if window.is_key_down(Key::Left) {
-        player.turn_left();
+        turn = Some(TurnMovement::TurnLeft);
     }
 
     if window.is_key_down(Key::Right) {
-        player.turn_right();
+        turn = Some(TurnMovement::TurnRight);
     }
 
     if window.is_key_down(Key::Up) {
-        player.set_walk_forward();
+        straight = Some(StraightMovement::Forward);
     }
 
     if window.is_key_down(Key::Down) {
-        player.set_walk_backward();
+        straight = Some(StraightMovement::Backward);
     }
 
     if window.is_key_down(Key::Comma) {
-        player.set_walk_left();
+        side = Some(SideMovement::StrafeLeft);
     }
 
     if window.is_key_down(Key::Period) {
-        player.set_walk_right();
+        side = Some(SideMovement::StrafeRight);
     }
 
-    player.start_walk(map);
+    player.walk(map, straight, side, turn, run);
 
     Ok(())
 }
