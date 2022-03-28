@@ -67,8 +67,8 @@ impl Player {
             };
 
             let current_move_speed = match run {
-                true => MOVE_SPEED * 2.0,
-                false => MOVE_SPEED * 2.0,
+                true => MOVE_SPEED * 2.0, // running speed
+                false => MOVE_SPEED,      // walking speed
             };
 
             // new player position (player scale)

@@ -107,27 +107,37 @@ fn process_input(
         run = true;
     }
 
-    if window.is_key_down(Key::Left) {
-        turn = Some(TurnMovement::TurnLeft);
+    if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
+        if window.is_key_down(Key::LeftAlt) {
+            // alternate from turning to strafing
+            side = Some(SideMovement::StrafeLeft);
+        } else {
+            turn = Some(TurnMovement::TurnLeft);
+        }
     }
 
-    if window.is_key_down(Key::Right) {
-        turn = Some(TurnMovement::TurnRight);
+    if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
+        if window.is_key_down(Key::LeftAlt) {
+            // alternate from turning to strafing
+            side = Some(SideMovement::StrafeRight);
+        } else {
+            turn = Some(TurnMovement::TurnRight);
+        }
     }
 
-    if window.is_key_down(Key::Up) {
+    if window.is_key_down(Key::Up) || window.is_key_down(Key::W) {
         straight = Some(StraightMovement::Forward);
     }
 
-    if window.is_key_down(Key::Down) {
+    if window.is_key_down(Key::Down) || window.is_key_down(Key::S) {
         straight = Some(StraightMovement::Backward);
     }
 
-    if window.is_key_down(Key::Comma) {
+    if window.is_key_down(Key::Q) {
         side = Some(SideMovement::StrafeLeft);
     }
 
-    if window.is_key_down(Key::Period) {
+    if window.is_key_down(Key::E) {
         side = Some(SideMovement::StrafeRight);
     }
 
