@@ -108,7 +108,7 @@ fn process_input(
     }
 
     if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
-        if window.is_key_down(Key::LeftAlt) {
+        if window.is_key_down(Key::X) {
             // alternate from turning to strafing
             side = Some(SideMovement::StrafeLeft);
         } else {
@@ -117,7 +117,7 @@ fn process_input(
     }
 
     if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
-        if window.is_key_down(Key::LeftAlt) {
+        if window.is_key_down(Key::X) {
             // alternate from turning to strafing
             side = Some(SideMovement::StrafeRight);
         } else {

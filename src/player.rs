@@ -4,7 +4,7 @@ use crate::map;
 use crate::map::Tile;
 use std::f64::consts::PI;
 
-const ROTATE_SPEED: f64 = 0.2;
+const ROTATE_SPEED: f64 = 0.02;
 const MOVE_SPEED: f64 = 2.5;
 const PLAYER_WIDTH: f64 = 7.0;
 
