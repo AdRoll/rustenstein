@@ -51,7 +51,7 @@ pub fn draw_rays(n_rays: u32, height: u32, map: &Map, player: &Player) -> Vec<Ra
 
 //canvas parameter left here to facilitate debug drawings
 fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u16) {
-    let ray_angle = norm_angle(player.angle + ray_offset);
+    let ray_angle = norm_angle(player.view_angle + ray_offset);
 
     //looking to the side -- cannot hit a horizontal line
     if ray_angle == ANGLE_LEFT || ray_angle == ANGLE_RIGHT {
@@ -80,7 +80,7 @@ fn cast_ray_v(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u1
 }
 
 fn cast_ray_h(map: &Map, player: &Player, ray_offset: f64) -> (f64, f64, f64, u16) {
-    let ray_angle = norm_angle(player.angle + ray_offset);
+    let ray_angle = norm_angle(player.view_angle + ray_offset);
 
     //looking up/down -- cannot hit a vertical line
     if ray_angle == ANGLE_UP || ray_angle == ANGLE_DOWN {

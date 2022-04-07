@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::player::{SideMovement, StraightMovement, TurnMovement};
 use cache::Picture;
 use core::slice::Iter;
 use std::time::Instant;
@@ -78,8 +79,9 @@ pub fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
     show_title(&game, &mut video, &mut window);
+    let map = &game.map;
 
-    while process_input(&window, &mut game.player).is_ok() {
+    while process_input(&window, &mut game.player, map).is_ok() {
         draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
         draw_status(&game, &mut video);
@@ -88,26 +90,58 @@ pub fn main() {
     }
 }
 
-fn process_input(window: &Window, player: &mut player::Player) -> Result<(), String> {
+fn process_input(
+    window: &Window,
+    player: &mut player::Player,
+    map: &map::Map,
+) -> Result<(), String> {
     if !window.is_open() || window.is_key_pressed(Key::Escape, KeyRepeat::No) {
         return Err(String::from("Goodbye!"));
     }
 
-    if window.is_key_down(Key::Left) {
-        player.turn_left();
+    let mut straight: Option<StraightMovement> = None;
+    let mut side: Option<SideMovement> = None;
+    let mut turn: Option<TurnMovement> = None;
+    let mut run = false;
+    if window.is_key_down(Key::LeftShift) {
+        run = true;
     }
 
-    if window.is_key_down(Key::Right) {
-        player.turn_right();
+    if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
+        if window.is_key_down(Key::X) {
+            // alternate from turning to strafing
+            side = Some(SideMovement::StrafeLeft);
+        } else {
+            turn = Some(TurnMovement::TurnLeft);
+        }
     }
 
-    if window.is_key_down(Key::Up) {
-        player.move_forward();
+    if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
+        if window.is_key_down(Key::X) {
+            // alternate from turning to strafing
+            side = Some(SideMovement::StrafeRight);
+        } else {
+            turn = Some(TurnMovement::TurnRight);
+        }
     }
 
-    if window.is_key_down(Key::Down) {
-        player.move_backward();
+    if window.is_key_down(Key::Up) || window.is_key_down(Key::W) {
+        straight = Some(StraightMovement::Forward);
     }
+
+    if window.is_key_down(Key::Down) || window.is_key_down(Key::S) {
+        straight = Some(StraightMovement::Backward);
+    }
+
+    if window.is_key_down(Key::Q) {
+        side = Some(SideMovement::StrafeLeft);
+    }
+
+    if window.is_key_down(Key::E) {
+        side = Some(SideMovement::StrafeRight);
+    }
+
+    player.walk(map, straight, side, turn, run);
 
     Ok(())
 }

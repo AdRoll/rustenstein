@@ -90,7 +90,8 @@ impl Map {
         player::Player {
             x: player_x,
             y: player_y,
-            angle: player_angle,
+            view_angle: player_angle,
+            move_angle: player_angle,
         }
     }
 
